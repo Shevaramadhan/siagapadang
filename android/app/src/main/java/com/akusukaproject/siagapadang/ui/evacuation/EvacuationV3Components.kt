@@ -138,7 +138,7 @@ internal fun EvacuationTopBar(
         )
         Spacer(Modifier.width(6.dp))
         StatusCircle(
-            iconRes = R.drawable.ic_ms_warning,
+            iconRes = R.drawable.ic_ms_campaign,
             tint = statusTintOnLight(bmkgStatusColor(state)),
             hasProblem = bmkgHasProblem(state),
             selected = selected == StatusDetailType.BMKG,
@@ -173,7 +173,7 @@ internal fun StatusColumnV3(
             onClick = { onSelect(StatusDetailType.NETWORK) },
         )
         StatusCircle(
-            iconRes = R.drawable.ic_ms_warning,
+            iconRes = R.drawable.ic_ms_campaign,
             tint = statusTintOnLight(bmkgStatusColor(state)),
             hasProblem = bmkgHasProblem(state),
             selected = selected == StatusDetailType.BMKG,
