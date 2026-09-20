@@ -1,8 +1,8 @@
 # Backlog Fitur SIAGA PADANG yang Belum Selesai
 
-Dokumen ini menjadi daftar kerja untuk pengembangan lanjutan SIAGA PADANG. Audit awal dilakukan pada branch `main`, commit `61bed05`, tanggal 14 September 2026. **Status diperbarui 19 September 2026** setelah P0, P1-01, P1-03, P1-04, dan F-07 digabung ke `main`.
+Dokumen ini menjadi daftar kerja untuk pengembangan lanjutan SIAGA PADANG. Audit awal dilakukan pada branch `main`, commit `61bed05`, tanggal 14 September 2026. **Status diperbarui 20 September 2026** pada commit `6361710`, setelah P0, P1-01, P1-03, P1-04, F-07, dataset 2026.09.19, dan desain V3 digabung ke `main`.
 
-Dokumen ini adalah sumber status utama. `CONTEXT.md` dan tabel status lama lainnya bersifat historis.
+Dokumen ini adalah sumber status utama. `CONTEXT.md` dan tabel status lama lainnya bersifat historis. Alasan di balik keputusan, hasil pengukuran, dan jebakan yang sudah ditemui dicatat di `docs/HANDOFF.md`.
 
 ## Arti Status
 
@@ -21,7 +21,7 @@ Bagian berikut tidak perlu dibuat ulang:
 - Penentuan status zona dari data lokal.
 - Penyajian rute utama dan dua alternatif dari SQLite lokal.
 - Petunjuk arah, kompas, jarak, ETA, dan hitung mundur.
-- Pergantian rute lokal ketika pengguna menekan tombol **Jalur Terhalang**.
+- Pergantian rute lokal ketika pengguna menekan tombol **Ada kendala?** — mencari jalan lain ke TES yang sama lebih dahulu (satu lompatan tetangga, tanpa pencarian lintasan), lalu `rank_2`/`rank_3`, lalu orientasi terakhir.
 - Konfirmasi tiba di dekat TES atau ujung rute.
 - Overlay lokal jaringan jalan, rute, tujuan, dan zona.
 - Integrasi Android dengan status gempa terbaru BMKG melalui backend.
@@ -32,6 +32,8 @@ Bagian berikut tidak perlu dibuat ulang:
 - P1-01 sinkronisasi dataset aman, P1-03 kedatangan di luar zona rendaman, P1-04 orientasi terakhir setelah semua rute ditolak.
 - F-07 rencana titik temu keluarga, termasuk pengingat titik temu pada dialog kedatangan.
 - Latar peta gelap dan jaringan jalan lokal yang terbaca ketika ubin peta tidak tersedia.
+- Desain V3 diterapkan pada seluruh layar: fondasi tipografi Inter dan 55 ikon Material Symbols, layar evakuasi navy, mode peta besar, layar masa tenang berlatar krem (Menu dashboard, Daftar Fasilitas, Panduan, Pengaturan, Tentang), dialog kedatangan, dan onboarding pertama kali.
+- Dataset 2026.09.19 dengan TEA (`tb_tea`, `tb_tea_routes`, `tb_tea_next`, view `v_fasilitas_evakuasi`); TEA tampil sebagai informasi fasilitas, belum sebagai tujuan rute.
 
 ## Prioritas 0 — Dikerjakan Lebih Dahulu
 
@@ -121,6 +123,8 @@ Kriteria selesai:
 ### P0-04 — Pengiriman Laporan Jalur Terhalang
 
 **Status:** Selesai — dikerjakan Habib, commit `8e705d8`, digabung ke `main` 19 September 2026. Hasil uji kriteria selesai lintas perangkat belum tercatat.
+
+**Terhambat (20 September):** laporan belum pernah benar-benar sampai ke server. Checksum dataset di Railway (`6c12d8…`) berbeda dengan dataset aplikasi (`5d1549f0…`), sehingga aplikasi sengaja tidak mengirim laporan dengan `dataset_version_id` yang tidak cocok. Pesan kegagalan sudah dibedakan secara jujur (luring / galat server / ditolak / versi dataset tidak cocok). Perbaikan ada di sisi backend: muat dataset yang identik ke Railway, lalu ulangi uji ujung ke ujung.
 
 **Status awal (14 September):** Pergantian lokal selesai; pengiriman Android belum
 **Dependensi:** P0-01 dan P0-02.
@@ -413,6 +417,22 @@ Kriteria selesai:
 - Uji minimal 3–5 perangkat berbeda merek dan versi Android.
 - Uji GPS buruk, izin ditolak, sensor kompas tidak tersedia, baterai hemat, rotasi layar, dan aplikasi kembali dari latar belakang.
 - Catat ukuran APK per ABI dan ukuran dataset setelah basemap luring ditambahkan.
+- Putuskan status NF-03. Dataset 2026.09.19 berukuran 76.419.072 byte — 72,9 MiB, tetapi 76,4 MB desimal, yaitu melewati batas 75 MB bila dihitung dengan satuan itu. Pilihannya: perbarui batas di proposal dengan alasan penambahan TEA, atau minta Habib memadatkan. Jangan mengubah angka target tanpa mencatat alasannya.
+
+### Q-06 — Verifikasi Perangkat untuk Desain V3
+
+**Status:** Belum diuji di perangkat. Kode lulus kompilasi dan 113 uji unit, tetapi tampilan belum pernah dilihat di layar nyata. Penundaan ini disengaja atas permintaan Mikail, bukan kelalaian.
+
+Pekerjaan:
+
+- Uji tujuh perapian UI pada commit `6361710`: kompas, legenda zona, kontras zona, ketuk dua kali peta untuk membesarkan/mengecilkan, kehalusan animasi, ketebalan panah, popup putih yang muncul dari ikonnya, dan hitung mundur yang terlihat bergerak.
+- Uji tombol **Bagikan** dan **Hapus** pada rencana keluarga.
+- Uji ulang seluruh layar masa tenang pada font sistem besar dan layar kecil.
+- Catatan: galat seperti tombol tak terlihat saat nonaktif, banner menutupi kartu arah, dan ikon status bar putih di layar krem hanya ditemukan lewat pengujian perangkat. Jangan menyatakan pekerjaan UI selesai sebelum dilihat di layar nyata.
+
+### UI-01 — Rapikan `EvacuationScreen.kt`
+
+**Status:** Belum. Berkas sudah 3.479 baris dan masih memuat composable lama dari desain sebelum V3 yang tidak lagi dipanggil. Keluarkan yang mati, dan pindahkan bagian yang masih dipakai ke `EvacuationV3Components.kt` sesuai aturan satu file satu tanggung jawab (`CLAUDE.md` Bagian 10).
 
 ### Q-02 — Aksesibilitas dan Keterbacaan Darurat
 
@@ -439,6 +459,7 @@ Kriteria selesai:
 - ✅ `CONTEXT.md` diberi penanda dokumen historis dan status Android diperbarui (19 September 2026).
 - ✅ Dokumen ini ditetapkan sebagai sumber status utama.
 - ✅ Pemeriksaan karakter rusak pada `README.md`, `CONTEXT.md`, dan `docs/*.md` tidak menemukan masalah.
+- ✅ `docs/HANDOFF.md` dibuat 20 September 2026 sebagai dokumen serah terima: keadaan aplikasi, alasan keputusan desain V3, fakta dataset, jebakan build, dan pembagian pekerjaan yang tertunda.
 - Selanjutnya: catat pekerjaan baru sebagai issue GitHub berjudul kode kebutuhan (`CLAUDE.md` Bagian 9) agar keterlacakan kebutuhan → kode terlihat.
 
 ## Saran Pembagian kepada Teman

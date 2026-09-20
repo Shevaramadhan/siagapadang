@@ -31,6 +31,8 @@ Alur evaluasi utama adalah GPS → node terdekat → rute lokal → perakitan ge
 
 Lihat [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) sebelum membuat modul atau kelas baru.
 
+Sebelum melanjutkan pekerjaan yang sudah berjalan, baca [`docs/HANDOFF.md`](docs/HANDOFF.md) — keadaan aplikasi terkini, alasan di balik keputusan desain, jebakan build, dan pekerjaan yang tertunda — lalu [`docs/BACKLOG_FITUR_BELUM_SELESAI.md`](docs/BACKLOG_FITUR_BELUM_SELESAI.md) sebagai sumber status fitur.
+
 ## Lisensi
 
 Kode sumber dilisensikan di bawah MIT License (lihat berkas [`LICENSE`](LICENSE)).

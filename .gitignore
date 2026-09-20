@@ -38,3 +38,7 @@ hf-space/
 
 # Output build alternatif saat folder build dikunci IDE
 android/app/build-verify/
+
+# Catatan crash JVM dari Gradle
+hs_err_pid*.log
+replay_pid*.log
