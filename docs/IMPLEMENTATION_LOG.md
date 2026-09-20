@@ -96,3 +96,23 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
   koordinat terakhir geometri rute.
 - **Validasi ditunda atas arahan pengguna:** alur penolakan tiga rute pada perangkat, perubahan arah
   terhadap kompas/GPS nyata, dan pemeriksaan visual pada berbagai ukuran layar.
+
+## 20 September 2026 — P1-08 Perilaku Saat Waktu Evakuasi Habis
+
+- Branch: `feat/p1-countdown-expired`
+- Menambahkan keadaan `hasEvacuationWindowExpired` ketika waktu mencapai nol dan pengguna belum tiba.
+- Kartu arah dan waktu diganti dengan satu kartu tindakan yang memprioritaskan evakuasi vertikal.
+- Garis rute, jalur pendekatan, penanda tujuan, ETA, arahan belokan, riwayat rute, dan pilihan kendala
+  dinonaktifkan setelah waktu habis agar aplikasi tidak tetap menyuruh pengguna menuju TES/TEA jauh.
+- Mode peta besar menampilkan header khusus “Waktu evakuasi habis” tanpa panduan rute lama.
+- Arahan menyebut bangunan evakuasi bertingkat atau bangunan beton bertulang yang tidak tampak rusak,
+  penggunaan tangga dan bukan lift, lantai paling atas (sedikitnya lantai 3), menjauhi pantai dan
+  sungai, serta mengikuti petugas atau rambu evakuasi.
+- Redaksi diperiksa terhadap panduan BMKG dan Pedoman Sosialisasi Penanggulangan Bencana BNPB 2024.
+  Validasi terminologi dan arahan lokal dengan BPBD Kota Padang tetap masuk Q-03.
+- Unit test `:android:app:testDebugUnitTest` lulus, termasuk keadaan waktu nol dan pengecualian ketika
+  pengguna sudah tiba.
+- Pemeriksaan visual dengan durasi uji sementara 8 detik lulus pada Infinix X6855 (Android 16):
+  kartu ringkas dan header peta besar beralih ke arahan evakuasi vertikal tanpa crash.
+- Durasi produksi dikembalikan ke 20 menit setelah pengujian. Pengujian transisi nyata selama
+  20 menit serta validasi redaksi oleh BPBD Kota Padang masih diperlukan.

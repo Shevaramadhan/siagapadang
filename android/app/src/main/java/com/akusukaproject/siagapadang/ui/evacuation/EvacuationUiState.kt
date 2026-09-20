@@ -84,10 +84,15 @@ data class EvacuationUiState(
         }
 
     val canSelectAlternative: Boolean
-        get() = route != null && remainingAlternativeCount > 0 && !isLoadingRoute && !hasArrived
+        get() = route != null && remainingAlternativeCount > 0 && !isLoadingRoute &&
+            !hasArrived && !hasEvacuationWindowExpired
+
+    val hasEvacuationWindowExpired: Boolean
+        get() = remainingEvacuationSeconds <= 0 && !hasArrived
 
     val canReportBlockedRoute: Boolean
-        get() = route != null && !isLoadingRoute && !hasArrived && directOrientation == null
+        get() = route != null && !isLoadingRoute && !hasArrived && directOrientation == null &&
+            !hasEvacuationWindowExpired
 
     companion object {
         const val EVACUATION_WINDOW_SECONDS = 20 * 60

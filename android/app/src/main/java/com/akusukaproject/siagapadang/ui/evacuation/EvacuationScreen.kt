@@ -410,7 +410,9 @@ private fun EvacuationContent(
                         translationY = -expansionProgress * with(density) { scaled(45f).toPx() },
                     ),
             ) {
-                if (state.directOrientation != null) {
+                if (state.hasEvacuationWindowExpired) {
+                    ExpiredEvacuationCardV3()
+                } else if (state.directOrientation != null) {
                     DirectOrientationCard(
                         orientation = state.directOrientation,
                         deviceHeadingDegrees = state.deviceHeadingDegrees,
@@ -1995,7 +1997,9 @@ private fun EvacuationMapPanel(
     ) {
         val isApproachingRoute = state.guidance?.isApproachingRoute == true
         val nearestRouteCoordinate = state.guidance?.nearestRouteCoordinate
-        val routeCoordinates = if (state.directOrientation == null) {
+        val routeCoordinates = if (
+            state.directOrientation == null && !state.hasEvacuationWindowExpired
+        ) {
             state.route?.coordinates.orEmpty()
         } else {
             emptyList()
@@ -2017,29 +2021,41 @@ private fun EvacuationMapPanel(
             tsunamiZoneOverlay = state.tsunamiZoneOverlay,
             routeCoordinates = remainingRouteCoordinates,
             approachRouteCoordinates = if (
-                state.directOrientation == null &&
+                state.directOrientation == null && !state.hasEvacuationWindowExpired &&
                 isApproachingRoute && state.currentLocation != null && nearestRouteCoordinate != null
             ) {
                 listOf(state.currentLocation, nearestRouteCoordinate)
             } else {
                 emptyList()
             },
-            approachTargetLocation = if (isApproachingRoute) nearestRouteCoordinate else null,
-            previousRouteCoordinates = if (state.directOrientation == null) {
+            approachTargetLocation = if (
+                isApproachingRoute && !state.hasEvacuationWindowExpired
+            ) nearestRouteCoordinate else null,
+            previousRouteCoordinates = if (
+                state.directOrientation == null && !state.hasEvacuationWindowExpired
+            ) {
                 state.previousRoutes.map { route -> route.coordinates }
             } else {
                 emptyList()
             },
             currentLocation = state.currentLocation,
-            destinationLocation = state.route?.destinationCoordinate,
-            destinationName = state.route?.destinationName,
-            destinationKindLabel = state.route?.destinationKind,
+            destinationLocation = state.route?.destinationCoordinate
+                ?.takeUnless { state.hasEvacuationWindowExpired },
+            destinationName = state.route?.destinationName
+                ?.takeUnless { state.hasEvacuationWindowExpired },
+            destinationKindLabel = state.route?.destinationKind
+                ?.takeUnless { state.hasEvacuationWindowExpired },
             destinationDurationLabel = (
-                state.directOrientation?.distanceMeters
+                state.directOrientation?.distanceMeters?.takeUnless { state.hasEvacuationWindowExpired }
                     ?: state.guidance?.remainingDistanceMeters
+                        ?.takeUnless { state.hasEvacuationWindowExpired }
                 )?.let { meters -> formatWalkingDuration(meters) },
-            destinationDistanceLabel = state.directOrientation?.distanceMeters?.let(::formatDistance)
-                ?: state.guidance?.remainingDistanceMeters?.let(::formatDistance),
+            destinationDistanceLabel = state.directOrientation?.distanceMeters
+                ?.takeUnless { state.hasEvacuationWindowExpired }
+                ?.let(::formatDistance)
+                ?: state.guidance?.remainingDistanceMeters
+                    ?.takeUnless { state.hasEvacuationWindowExpired }
+                    ?.let(::formatDistance),
             deviceHeadingDegrees = state.deviceHeadingDegrees,
             followUserLocation = followUserLocation,
             recenterRequest = recenterRequest,
@@ -2078,7 +2094,14 @@ private fun EvacuationMapPanel(
             }
         }
 
-        state.route?.takeIf { state.directOrientation == null }?.let { route ->
+        if (state.hasEvacuationWindowExpired) {
+            ExpiredMapHeader(
+                scale = scale,
+                modifier = Modifier
+                    .graphicsLayer(alpha = expansionProgress)
+                    .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onCollapseMap() }) },
+            )
+        } else state.route?.takeIf { state.directOrientation == null }?.let { route ->
             ExpandedMapHeader(
                 route = route,
                 guidance = state.guidance,
@@ -2149,6 +2172,7 @@ private fun EvacuationMapPanel(
             hasArrived = state.hasArrived,
             arrivalReason = state.arrivalReason,
             isDirectOrientationActive = state.directOrientation != null,
+            isEvacuationWindowExpired = state.hasEvacuationWindowExpired,
             onClick = onBlockedRouteClick,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -2629,6 +2653,57 @@ private fun ExpandedMapHeader(
                     Text("SISA", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
                     Text(formatDuration(remainingSeconds), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.ExpiredMapHeader(
+    scale: Float,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = SiagaRustDeep,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(EXPANDED_HEADER_HEIGHT),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 18.dp, end = 86.dp, top = 14.dp, bottom = 34.dp),
+        ) {
+            Surface(
+                color = Color.White,
+                contentColor = SiagaRustDeep,
+                shape = CircleShape,
+                modifier = Modifier.size((66f * scale).dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_ms_warning),
+                        contentDescription = null,
+                        modifier = Modifier.size((38f * scale).dp),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column {
+                Text(
+                    text = "Waktu evakuasi habis",
+                    fontSize = 23.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    text = "Lakukan evakuasi vertikal. Gunakan tangga dan naik ke lantai paling atas.",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
