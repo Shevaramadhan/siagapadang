@@ -1919,6 +1919,9 @@ private fun EvacuationMapPanel(
 ) {
     var followUserLocation by rememberSaveable { mutableStateOf(true) }
     var recenterRequest by rememberSaveable { mutableIntStateOf(0) }
+    // Tinggi tombol tindakan di bawah diukur agar tombol pusatkan berdiri di atasnya dengan
+    // jarak tetap, berapa pun banyak baris teks yang dipakai tombol itu.
+    var bottomActionHeightPx by remember { mutableIntStateOf(0) }
     var routeOverviewRequest by rememberSaveable { mutableIntStateOf(0) }
     var routeChangeNotice by remember { mutableStateOf<String?>(null) }
     var zoneStatusNotice by remember { mutableStateOf<String?>(null) }
@@ -2135,7 +2138,14 @@ private fun EvacuationMapPanel(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 84.dp)
+                    .padding(
+                        end = 16.dp,
+                        bottom = if (bottomActionHeightPx > 0) {
+                            with(LocalDensity.current) { bottomActionHeightPx.toDp() } + 12.dp
+                        } else {
+                            96.dp
+                        },
+                    )
                     .zIndex(9f),
             )
         }
@@ -2146,7 +2156,8 @@ private fun EvacuationMapPanel(
                 onClick = onRecheckInitialZone,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp),
+                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp)
+                    .onSizeChanged { bottomActionHeightPx = it.height },
             )
         }
 
@@ -2161,7 +2172,8 @@ private fun EvacuationMapPanel(
                 onClick = onBlockedRouteClick,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp),
+                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp)
+                    .onSizeChanged { bottomActionHeightPx = it.height },
             )
         }
 
