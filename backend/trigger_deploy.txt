@@ -1,2 +1,0 @@
-File ini ditambahkan secara otomatis untuk memancing GitHub Actions agar berjalan dan mengirimkan kode backend ke Hugging Face.
-trigger2

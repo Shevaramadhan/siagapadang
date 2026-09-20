@@ -187,33 +187,4 @@ def get_sync_network(
         },
     )
 
-@router.get("/fix-db-prod")
-def fix_db_prod(db: Session = Depends(get_db)):
-    from app.models.domain import EmergencyEvent, EventStatus, Checkin, ShelterOccupancyReport, EvacuationPoint, DataVersion
-    
-    # 1. Close event EVENT-PADANG-TEST-01
-    event = db.query(EmergencyEvent).filter_by(external_event_id="EVENT-PADANG-TEST-01", status=EventStatus.ACTIVE).first()
-    if event:
-        event.status = EventStatus.CLOSED
-        db.add(event)
-    
-    # 2. Delete test data for e2e-uji-claude-1
-    db.query(Checkin).filter(Checkin.device_hash == "e2e-uji-claude-1").delete()
-    db.query(ShelterOccupancyReport).filter(ShelterOccupancyReport.device_hash == "e2e-uji-claude-1").delete()
 
-    # 3. Find TES_56 and delete its test data
-    tes56 = db.query(EvacuationPoint).filter_by(external_id="TES_56").first()
-    if tes56:
-        db.query(Checkin).filter(Checkin.evacuation_point_id == tes56.id).delete()
-        db.query(ShelterOccupancyReport).filter(ShelterOccupancyReport.evacuation_point_id == tes56.id).delete()
-
-    # 4. Fix dataset 'shelters' version 2026.08.01
-    dv = db.query(DataVersion).filter_by(dataset_name="shelters", version="2026.08.01").first()
-    if dv:
-        dv.checksum = "ecd93df142533b2625d329df7128f9e7057c5ffd38e76de02fd9d4745fd74786"
-        dv.size_bytes = 76414976
-        dv.download_url = "/api/v1/sync/ota/download"
-        db.add(dv)
-    
-    db.commit()
-    return {"status": "fixed"}
