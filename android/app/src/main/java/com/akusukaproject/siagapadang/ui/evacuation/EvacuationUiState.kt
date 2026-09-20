@@ -39,6 +39,9 @@ data class EvacuationUiState(
     val offlineRoadOverlay: OfflineRoadOverlay? = null,
     val tsunamiZoneOverlay: TsunamiZoneOverlay? = null,
     val currentZoneStatus: InundationZoneStatus? = null,
+    val isCheckingInitialZone: Boolean = false,
+    val isOutsideInundationZoneAtStart: Boolean = false,
+    val initialZoneCheckMessage: String? = null,
     val zoneTransitionVersion: Int = 0,
     val zoneTransitionMessage: String? = null,
     val guidance: RouteGuidanceSnapshot? = null,
@@ -88,7 +91,8 @@ data class EvacuationUiState(
             !hasArrived && !hasEvacuationWindowExpired
 
     val hasEvacuationWindowExpired: Boolean
-        get() = remainingEvacuationSeconds <= 0 && !hasArrived
+        get() = remainingEvacuationSeconds <= 0 && !hasArrived &&
+            !isOutsideInundationZoneAtStart
 
     val canReportBlockedRoute: Boolean
         get() = route != null && !isLoadingRoute && !hasArrived && directOrientation == null &&

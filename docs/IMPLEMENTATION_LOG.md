@@ -126,3 +126,24 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Banner transisi zona yang panjang hanya ditampilkan pada peta besar. Peta ringkas memakai pil
   status tetap sehingga informasi tidak hilang dan panah pengguna tidak tertutup.
 - Build debug berhasil dipasang dan kedua mode diperiksa pada Infinix X6855 tanpa crash.
+## 20 September 2026 — P1-09 Posisi Awal di Luar Zona Rendaman
+
+- Branch: `feat/p1-outside-zone-start`; belum di-push atas arahan pengguna sambil menunggu perbaikan
+  dari Sheva.
+- Pemeriksaan zona lokal sekarang dilakukan setelah lokasi pertama diterima dan sebelum permintaan
+  rute maupun hitung mundur dimulai.
+- Posisi di luar zona hanya diterima bila akurasi GPS maksimal 35 meter. Aplikasi lalu menampilkan
+  layar khusus tanpa rute, ETA, hitung mundur, atau tombol pelaporan kendala.
+- Layar tetap menampilkan peta dan posisi pengguna, arahan untuk menjauhi pantai dan sungai, serta
+  tombol **Periksa posisi lagi**. Hasil pemeriksaan ulang ditampilkan langsung pada kartu.
+- Jika GPS belum akurat atau data zona tidak tersedia, aplikasi tetap menyiapkan arahan evakuasi
+  sebagai fallback dan terus memeriksa zona pada pembaruan lokasi berikutnya.
+- Hitung mundur sekarang dimulai ketika rute berhasil disiapkan, bukan ketika `ViewModel` dibuat.
+  Jika pemeriksaan ulang menyatakan pengguna masuk zona rendaman, rute baru dan hitung mundur penuh
+  20 menit dimulai.
+- Unit test `:android:app:testDebugUnitTest`: 130 lulus, 0 gagal. Empat tes baru mencakup posisi awal
+  di luar/dalam zona, GPS lemah, dan data zona tidak tersedia.
+- Pemeriksaan perangkat lulus pada Infinix X6855 (Android 16): layar khusus muncul saat aplikasi
+  dibuka di luar zona, tidak ada hitung mundur atau tombol **Ada kendala?**, pemeriksaan ulang
+  menampilkan “Posisi masih berada di luar zona rendaman.”, dan mode peta besar tetap bersih dari
+  kontrol rute.

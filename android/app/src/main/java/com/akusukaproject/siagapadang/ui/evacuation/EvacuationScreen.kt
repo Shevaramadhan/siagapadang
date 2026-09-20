@@ -183,6 +183,7 @@ fun EvacuationScreen(
         evidenceDestinationCapacity = evidenceDestinationCapacity,
         onRequestLocationPermission = ::requestLocationPermission,
         onRetryRoute = viewModel::retryRoute,
+        onRecheckInitialZone = viewModel::recheckInitialZone,
         onRefreshBmkgStatus = viewModel::refreshBmkgStatus,
         onCheckDataUpdates = viewModel::checkDataUpdates,
         onInstallDataUpdate = viewModel::installDataUpdate,
@@ -205,6 +206,7 @@ private fun EvacuationContent(
     evidenceDestinationCapacity: Int?,
     onRequestLocationPermission: () -> Unit,
     onRetryRoute: () -> Unit,
+    onRecheckInitialZone: () -> Unit,
     onRefreshBmkgStatus: () -> Unit,
     onCheckDataUpdates: () -> Unit,
     onInstallDataUpdate: () -> Unit,
@@ -396,7 +398,22 @@ private fun EvacuationContent(
         }
 
         val route = state.route
-        if (route != null) {
+        if (state.isOutsideInundationZoneAtStart) {
+            OutsideZoneStartState(
+                state = state,
+                onRecheck = onRecheckInitialZone,
+                scale = scale,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = TOP_BAR_SPACE, start = 16.dp, end = 16.dp)
+                    .widthIn(max = 480.dp)
+                    .onSizeChanged { collapsedContentHeightPx = it.height }
+                    .graphicsLayer(
+                        alpha = collapsedContentAlpha,
+                        translationY = -expansionProgress * with(density) { scaled(45f).toPx() },
+                    ),
+            )
+        } else if (route != null) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2180,18 +2197,20 @@ private fun EvacuationMapPanel(
             )
         }
 
-        ObstacleButton(
-            enabled = state.canReportBlockedRoute,
-            isLoading = state.isLoadingRoute,
-            hasArrived = state.hasArrived,
-            arrivalReason = state.arrivalReason,
-            isDirectOrientationActive = state.directOrientation != null,
-            isEvacuationWindowExpired = state.hasEvacuationWindowExpired,
-            onClick = onBlockedRouteClick,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp),
-        )
+        if (!state.isOutsideInundationZoneAtStart) {
+            ObstacleButton(
+                enabled = state.canReportBlockedRoute,
+                isLoading = state.isLoadingRoute,
+                hasArrived = state.hasArrived,
+                arrivalReason = state.arrivalReason,
+                isDirectOrientationActive = state.directOrientation != null,
+                isEvacuationWindowExpired = state.hasEvacuationWindowExpired,
+                onClick = onBlockedRouteClick,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp),
+            )
+        }
 
     }
 }
@@ -3054,6 +3073,10 @@ private fun RoutePreparationState(
             title = "Mencari lokasi…"
             detail = "Pastikan GPS perangkat aktif. Arahan tetap disiapkan tanpa jaringan."
         }
+        state.isCheckingInitialZone -> {
+            title = "Memeriksa zona…"
+            detail = "Posisi awal diperiksa dari data zona yang tersimpan di perangkat."
+        }
         else -> {
             title = "Menyiapkan arahan…"
             detail = "Rute sedang dibaca dari data luring."
@@ -3073,7 +3096,9 @@ private fun RoutePreparationState(
             verticalArrangement = Arrangement.spacedBy((14f * scale).dp),
             modifier = Modifier.padding((24f * scale).dp),
         ) {
-            if (state.isLoadingRoute || state.currentLocation == null && state.hasLocationPermission) {
+            if (state.isLoadingRoute || state.isCheckingInitialZone ||
+                state.currentLocation == null && state.hasLocationPermission
+            ) {
                 CircularProgressIndicator(color = SiagaNavy)
             } else {
                 Image(
@@ -3101,6 +3126,103 @@ private fun RoutePreparationState(
                 state.errorMessage != null -> ActionButton(
                     text = "Coba lagi",
                     onClick = onRetryRoute,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutsideZoneStartState(
+    state: EvacuationUiState,
+    onRecheck: () -> Unit,
+    scale: Float,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = SiagaCream,
+        contentColor = SiagaNavy,
+        shape = RoundedCornerShape((22f * scale).dp),
+        shadowElevation = 8.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy((12f * scale).dp),
+            modifier = Modifier.padding((20f * scale).dp),
+        ) {
+            Surface(
+                color = SiagaSafeGreen,
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size((52f * scale).dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_ms_location_on),
+                        contentDescription = null,
+                        modifier = Modifier.size((30f * scale).dp),
+                    )
+                }
+            }
+            Text(
+                text = "Anda berada di luar zona rendaman",
+                fontSize = (22f * scale).sp,
+                lineHeight = (26f * scale).sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "Navigasi dan hitung mundur tidak dimulai karena posisi awal berada di luar zona rendaman yang tercatat.",
+                fontSize = (14f * scale).sp,
+                lineHeight = (19f * scale).sp,
+                textAlign = TextAlign.Center,
+            )
+            Surface(
+                color = Color.White,
+                contentColor = SiagaNavy,
+                shape = RoundedCornerShape((14f * scale).dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "Tetap menjauh dari pantai dan sungai. Ikuti petugas atau rambu evakuasi.",
+                    fontSize = (13f * scale).sp,
+                    lineHeight = (18f * scale).sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding((14f * scale).dp),
+                )
+            }
+            state.initialZoneCheckMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = SiagaTextSecondary,
+                    fontSize = (12f * scale).sp,
+                    lineHeight = (16f * scale).sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Button(
+                onClick = onRecheck,
+                enabled = !state.isCheckingInitialZone,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SiagaNavy,
+                    contentColor = Color.White,
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                if (state.isCheckingInitialZone) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                }
+                Text(
+                    text = if (state.isCheckingInitialZone) "Memeriksa…" else "Periksa posisi lagi",
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }

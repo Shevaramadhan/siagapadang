@@ -33,5 +33,11 @@ class EvacuationUiStateTest {
                 hasArrived = true,
             ).hasEvacuationWindowExpired,
         )
+        assertFalse(
+            EvacuationUiState(
+                remainingEvacuationSeconds = 0,
+                isOutsideInundationZoneAtStart = true,
+            ).hasEvacuationWindowExpired,
+        )
     }
 }

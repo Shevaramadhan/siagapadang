@@ -193,7 +193,7 @@ Galat yang sudah pernah ditemukan **hanya karena diuji di perangkat**, bukan lew
 ### Mikail (Android)
 
 - **Perilaku saat hitung mundur habis.** Sekarang tidak terjadi apa-apa: `startCountdown()` berhenti di `00:00` lalu perulangannya putus. Arahan "terus berjalan" menjadi keliru pada titik itu. Kalimat penggantinya arahan keselamatan, jadi harus divalidasi BPBD (Q-03).
-- **Layar saat aplikasi dibuka dari luar zona rendaman.** Saat ini aplikasi tetap menghitung rute dan menyalakan hitung mundur walau pengguna jelas berada di luar zona — peringatan palsu yang persis dihindari proyek ini. Kedatangan di luar zona hanya terdeteksi di tengah rute (`confirmOutsideZoneArrival`).
+- **P1-09 posisi awal di luar zona rendaman sudah dikerjakan di branch `feat/p1-outside-zone-start`.** Pemeriksaan zona lokal kini mendahului rute dan hitung mundur. Posisi luar zona dengan akurasi GPS maksimal 35 meter menampilkan layar khusus serta tombol pemeriksaan ulang; GPS lemah atau data zona tidak tersedia tetap memakai arahan evakuasi sebagai fallback. Unit test dan uji Infinix X6855 lulus. Branch belum di-push atas arahan pengguna.
 - **Pemberitahuan bila pengguna mengikuti rute lama** setelah berpindah ke alternatif tujuan.
 - Uji lapangan pengalihan keluar jalur.
 - Bersihkan composable lama yang tidak terpakai di `EvacuationScreen.kt` (berkas sudah di atas 3.500 baris).
