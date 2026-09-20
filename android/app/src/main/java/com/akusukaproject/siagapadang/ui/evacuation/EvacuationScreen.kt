@@ -2066,12 +2066,29 @@ private fun EvacuationMapPanel(
             onMapDoubleTap = if (expansionProgress < 0.5f) onExpandMap else null,
         )
 
-        // Satu susunan untuk kedua mode peta. Sebelumnya mode kecil memakai ikon bulat dan mode
-        // besar memakai pil, sehingga keterangan yang sama tampil dengan dua bentuk berbeda.
-        if (
-            state.tsunamiZoneOverlay != null ||
-            state.previousRoutes.isNotEmpty() ||
-            routeChangeNotice != null
+        if (state.tsunamiZoneOverlay != null) {
+            if (expansionProgress < 0.5f) {
+                CompactZoneStatusPill(
+                    status = state.currentZoneStatus,
+                    onClick = onExpandMap,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 8.dp)
+                        .zIndex(8f),
+                )
+            } else {
+                ZoneStatusPill(
+                    status = state.currentZoneStatus,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
+                        .zIndex(8f),
+                )
+            }
+        }
+
+        if (routeChangeNotice != null ||
+            (state.previousRoutes.isNotEmpty() && expansionProgress >= 0.5f)
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -2080,9 +2097,6 @@ private fun EvacuationMapPanel(
                     .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
                     .zIndex(8f),
             ) {
-                if (state.tsunamiZoneOverlay != null) {
-                    ZoneStatusPill(status = state.currentZoneStatus)
-                }
                 if (routeChangeNotice != null) {
                     RouteChangeNotice(message = routeChangeNotice.orEmpty(), scale = scale)
                 }
@@ -2134,7 +2148,7 @@ private fun EvacuationMapPanel(
                 .size(lerp((60f * scale).dp, (60f * scale).dp, expansionProgress)),
         )
 
-        zoneStatusNotice?.let { message ->
+        zoneStatusNotice?.takeIf { expansionProgress >= 0.5f }?.let { message ->
             ZoneStatusNotice(
                 message = message,
                 status = state.currentZoneStatus,
@@ -2338,6 +2352,75 @@ private fun ZoneStatusPill(
             }
         }
     }
+    }
+}
+
+/**
+ * Status ringkas untuk peta kecil. Lebarnya dibatasi agar tidak mencapai penanda lokasi yang
+ * dipusatkan pada peta; ketukan membuka peta besar dan legenda lengkap.
+ */
+@Composable
+private fun CompactZoneStatusPill(
+    status: InundationZoneStatus?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val appearance = zoneStatusAppearance(status)
+    val compactLabel = when (status) {
+        null, InundationZoneStatus.DataUnavailable -> "Status zona"
+        InundationZoneStatus.OutsideRecordedZone -> "Di luar zona"
+        is InundationZoneStatus.InsideRecordedZone -> when (status.dangerLevel.trim().lowercase()) {
+            "tinggi" -> "Bahaya tinggi"
+            "sedang" -> "Bahaya sedang"
+            "rendah" -> "Bahaya rendah"
+            else -> "Zona risiko"
+        }
+    }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .width(120.dp)
+            .height(48.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = "${appearance.label}. Perbesar peta untuk melihat keterangan zona"
+            },
+    ) {
+        Surface(
+            color = Color.White,
+            contentColor = SiagaNavy,
+            shape = RoundedCornerShape(16.dp),
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(appearance.dotColor),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = compactLabel,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(3.dp))
+                Icon(
+                    painterResource(R.drawable.ic_ms_expand_less),
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
     }
 }
 

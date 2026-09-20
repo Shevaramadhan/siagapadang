@@ -116,3 +116,13 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
   kartu ringkas dan header peta besar beralih ke arahan evakuasi vertikal tanpa crash.
 - Durasi produksi dikembalikan ke 20 menit setelah pengujian. Pengujian transisi nyata selama
   20 menit serta validasi redaksi oleh BPBD Kota Padang masih diperlukan.
+
+## 20 September 2026 — Status Zona Tidak Menutupi Penanda Pengguna
+
+- Pada peta ringkas, status zona memakai pil pendek di sisi kiri agar tidak mencapai penanda lokasi
+  pengguna yang berada di tengah peta.
+- Pil ringkas menampilkan status inti dan membuka peta besar ketika diketuk; peta besar tetap
+  menampilkan status lengkap beserta legenda warna zona.
+- Banner transisi zona yang panjang hanya ditampilkan pada peta besar. Peta ringkas memakai pil
+  status tetap sehingga informasi tidak hilang dan panah pengguna tidak tertutup.
+- Build debug berhasil dipasang dan kedua mode diperiksa pada Infinix X6855 tanpa crash.
