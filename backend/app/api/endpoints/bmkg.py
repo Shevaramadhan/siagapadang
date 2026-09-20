@@ -100,7 +100,7 @@ async def get_bmkg_status():
             )
 
     result = None
-    if utama_data:
+    if utama_data and "Infogempa" in utama_data:
         gempa = utama_data.get("Infogempa", {}).get("gempa", {})
         potensi_text = str(gempa.get("Potensi") or "").lower()
         is_tsunami = "tsunami" in potensi_text and "tidak berpotensi" not in potensi_text
@@ -126,8 +126,14 @@ async def get_bmkg_status():
         )
         bmkg_cache["last_fetched_utama"] = current_time
     else:
-        result = cached.model_copy()
-        result.data_status = "stale"
+        if cached:
+            result = cached.model_copy()
+            result.data_status = "stale"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Status BMKG sedang tidak tersedia (data kosong). Coba lagi beberapa saat.",
+            )
 
     if need_regional:
         if regional_data:
