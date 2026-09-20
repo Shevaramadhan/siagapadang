@@ -324,7 +324,9 @@ private fun EvacuationContent(
         // Kabar BMKG dianggap sudah dibaca setelah kartunya dibuka.
         var seenBmkgEventKey by rememberSaveable { mutableStateOf<String?>(null) }
         val bmkgEventKey = bmkgEventKey(state)
-        val bmkgIsUnread = bmkgEventKey != null && bmkgEventKey != seenBmkgEventKey
+        val bmkgIsUnread = bmkgEventKey != null &&
+            bmkgEventKey != seenBmkgEventKey &&
+            !bmkgEventIsFarAway(state)
         LaunchedEffect(selectedStatusDetail, bmkgEventKey) {
             if (selectedStatusDetail == StatusDetailType.BMKG) seenBmkgEventKey = bmkgEventKey
         }
@@ -1193,6 +1195,10 @@ private fun BmkgDetailBody(
         usingUserLocation = currentLocation != null,
     )
     val isFarAway = distanceKm != null && distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
+    if (isFarAway) {
+        FarAwayBmkgBody(status = status, distanceLabel = distanceLabel)
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (status.region.isNotBlank()) {
             Text(
@@ -1236,6 +1242,58 @@ private fun BmkgDetailBody(
                 if (status.isStale) "Tersimpan, belum diperbarui" else null,
                 "Sumber: BMKG",
             ).joinToString(" \u00b7 "),
+            color = SiagaTextSecondary,
+            fontSize = 11.sp,
+            lineHeight = 15.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/**
+ * Ringkasan satu baris untuk gempa di luar radius peringatan. Kejadiannya tetap disebut lengkap
+ * dengan jaraknya supaya pengguna dapat memeriksa sendiri, tetapi tidak lagi memakan ruang
+ * sebanyak kejadian yang benar-benar menyangkut Padang.
+ */
+@Composable
+private fun FarAwayBmkgBody(
+    status: BmkgStatus,
+    distanceLabel: String?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Gempa terbaru yang dilaporkan BMKG berada jauh dari Sumatera Barat.",
+            color = SiagaNavy,
+            fontSize = 14.sp,
+            lineHeight = 19.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (status.hasTsunamiPotential) {
+            // Pernyataan potensi tsunami tetap ditonjolkan berapa pun jaraknya; itu kewenangan BMKG.
+            BmkgHighlight(
+                text = "BMKG menyebut potensi tsunami pada kejadian ini, tetapi jaraknya jauh dari Padang.",
+                background = Color(0xFFFBE3D9),
+            )
+        }
+        Text(
+            text = "Gempa terbaru BMKG: " + listOfNotNull(
+                "M${status.magnitude}".takeIf { status.magnitude.isNotBlank() },
+                status.region.takeIf { it.isNotBlank() },
+                distanceLabel,
+            ).joinToString(" · "),
+            color = SiagaTextSecondary,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            text = listOfNotNull(
+                listOf(status.eventDate, status.eventTime)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                    .takeIf { it.isNotBlank() },
+                "Sumber: BMKG",
+            ).joinToString(" · "),
             color = SiagaTextSecondary,
             fontSize = 11.sp,
             lineHeight = 15.sp,
@@ -1328,9 +1386,13 @@ private fun StatusDetailCard(
         }
         StatusDetailType.BMKG -> {
             val bmkg = state.bmkgStatus
+            val bmkgIsFarAway = bmkgEventIsFarAway(state)
             title = when {
                 state.isLoadingBmkgStatus -> "Memuat info gempa"
                 bmkg?.isStale == true -> "Info gempa tersimpan"
+                // Kabar yang paling berguna ketika gempanya jauh adalah bahwa tidak ada gempa
+                // di dekat sini — bukan magnitudo kejadian di seberang Indonesia.
+                bmkg != null && bmkgIsFarAway -> "Tidak ada gempa dekat Padang"
                 bmkg?.magnitude?.isNotBlank() == true -> "Gempa M${bmkg.magnitude}"
                 bmkg != null -> "Gempa terbaru BMKG"
                 else -> "Info gempa belum tersedia"

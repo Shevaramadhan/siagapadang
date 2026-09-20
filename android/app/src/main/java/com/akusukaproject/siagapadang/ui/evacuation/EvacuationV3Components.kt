@@ -76,6 +76,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.akusukaproject.siagapadang.R
 import com.akusukaproject.siagapadang.data.model.EvacuationRoute
+import com.akusukaproject.siagapadang.domain.EarthquakeRelevance
 import com.akusukaproject.siagapadang.domain.ManeuverGuidance
 import com.akusukaproject.siagapadang.domain.ManeuverType
 import com.akusukaproject.siagapadang.domain.RouteGuidanceSnapshot
@@ -89,6 +90,18 @@ import com.akusukaproject.siagapadang.ui.theme.SiagaTextSecondary
 import com.akusukaproject.siagapadang.ui.theme.SiagaWarning
 
 private val CardShape = RoundedCornerShape(28.dp)
+
+/**
+ * Gempa di luar radius peringatan tidak menuntut tindakan apa pun dari pengguna di Padang.
+ * Kabarnya tetap ditampilkan, tetapi tidak diperlakukan sebagai kabar yang perlu dikejar.
+ */
+internal fun bmkgEventIsFarAway(state: EvacuationUiState): Boolean {
+    val distanceKm = EarthquakeRelevance.distanceKm(
+        epicenter = state.bmkgStatus?.epicenter,
+        reference = state.currentLocation,
+    ) ?: return false
+    return distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
+}
 
 /** Merah tua yang tetap memenuhi kontras 4.5:1 di atas lingkaran putih. */
 private val BMKG_UNREAD_COLOR = Color(0xFFC62828)
