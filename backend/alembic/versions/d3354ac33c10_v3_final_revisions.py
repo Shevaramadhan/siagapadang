@@ -29,6 +29,9 @@ def upgrade() -> None:
     op.execute("ALTER TYPE operationalstatus RENAME TO operationalstatus_old")
     operational_status_enum = sa.Enum('UNKNOWN', 'OPEN', 'CLOSED', 'LIMITED', name='operationalstatus')
     operational_status_enum.create(op.get_bind(), checkfirst=True)
+    # Map old values to new ones as text so cast succeeds
+    op.execute("UPDATE evacuation_points SET operational_status = 'OPEN'::operationalstatus_old WHERE operational_status = 'LAYAK'::operationalstatus_old OR operational_status = 'RUSAK_RINGAN'::operationalstatus_old")
+    op.execute("UPDATE evacuation_points SET operational_status = 'CLOSED'::operationalstatus_old WHERE operational_status = 'RUSAK_BERAT'::operationalstatus_old OR operational_status = 'TIDAK_LAYAK'::operationalstatus_old")
     op.execute("ALTER TABLE evacuation_points ALTER COLUMN operational_status TYPE operationalstatus USING operational_status::text::operationalstatus")
     op.execute("DROP TYPE operationalstatus_old")
     
@@ -36,6 +39,9 @@ def upgrade() -> None:
     op.execute("ALTER TYPE eventstatus RENAME TO eventstatus_old")
     event_status_enum = sa.Enum('DRAFT', 'ACTIVE', 'CLOSED', 'CANCELLED', name='eventstatus')
     event_status_enum.create(op.get_bind(), checkfirst=True)
+    # Map old values
+    op.execute("UPDATE emergency_events SET status = 'CLOSED'::eventstatus_old WHERE status = 'RESOLVED'::eventstatus_old")
+    op.execute("UPDATE emergency_events SET status = 'CANCELLED'::eventstatus_old WHERE status = 'FALSE_ALARM'::eventstatus_old")
     op.execute("ALTER TABLE emergency_events ALTER COLUMN status TYPE eventstatus USING status::text::eventstatus")
     op.execute("DROP TYPE eventstatus_old")
     
@@ -43,6 +49,8 @@ def upgrade() -> None:
     op.execute("ALTER TYPE obstructionstatus RENAME TO obstructionstatus_old")
     obstruction_status_enum = sa.Enum('PENDING', 'CONFIRMED', 'REJECTED', 'EXPIRED', name='obstructionstatus')
     obstruction_status_enum.create(op.get_bind(), checkfirst=True)
+    # Map old values
+    op.execute("UPDATE obstructions SET status = 'CONFIRMED'::obstructionstatus_old WHERE status = 'CROWD_CONFIRMED'::obstructionstatus_old OR status = 'OFFICIAL_CONFIRMED'::obstructionstatus_old")
     op.execute("ALTER TABLE obstructions ALTER COLUMN status TYPE obstructionstatus USING status::text::obstructionstatus")
     op.execute("DROP TYPE obstructionstatus_old")
 
@@ -67,12 +75,16 @@ def upgrade() -> None:
     op.add_column('evacuation_points', sa.Column('status_updated_at', sa.DateTime(timezone=True), nullable=True))
     op.create_unique_constraint('uq_obstruction_device', 'obstruction_reports', ['obstruction_id', 'device_hash'])
     
-    # We must empty the obstructions table if we drop columns or change FK since the data might be invalid.
-    # In a real app we'd migrate data. For dev we just clear it to avoid constraint errors.
-    op.execute("TRUNCATE TABLE obstructions CASCADE")
+    # Provide default dataset_version_id and edge_external_id to prevent NOT NULL errors on existing obstructions
+    op.add_column('obstructions', sa.Column('dataset_version_id', sa.Integer(), nullable=True))
+    op.add_column('obstructions', sa.Column('edge_external_id', sa.String(), nullable=True))
     
-    op.add_column('obstructions', sa.Column('dataset_version_id', sa.Integer(), nullable=False))
-    op.add_column('obstructions', sa.Column('edge_external_id', sa.String(), nullable=False))
+    # Assign dummy data to existing obstructions
+    op.execute("UPDATE obstructions SET dataset_version_id = 1, edge_external_id = edge_id::text WHERE dataset_version_id IS NULL")
+    
+    op.alter_column('obstructions', 'dataset_version_id', nullable=False)
+    op.alter_column('obstructions', 'edge_external_id', nullable=False)
+    
     op.alter_column('obstructions', 'event_id',
                existing_type=sa.INTEGER(),
                nullable=False)

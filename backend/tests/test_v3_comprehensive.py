@@ -187,7 +187,12 @@ async def test_obstruction_report_3_uuids_transition():
 @pytest.mark.anyio
 async def test_bmkg_status_uses_explicit_live_metadata():
     """Endpoint BMKG memberi label sumber dan kesegaran data secara eksplisit."""
-    payload = {
+    # Reset cache
+    bmkg.bmkg_cache["data"] = None
+    bmkg.bmkg_cache["last_fetched_utama"] = 0.0
+    bmkg.bmkg_cache["last_fetched_regional"] = 0.0
+
+    payload_utama = {
         "Infogempa": {
             "gempa": {
                 "Tanggal": "13 Sep 2026",
@@ -204,18 +209,46 @@ async def test_bmkg_status_uses_explicit_live_metadata():
             }
         }
     }
+    
+    payload_regional = {
+        "Infogempa": {
+            "gempa": [
+                {
+                    "Tanggal": "11 Sep 2026",
+                    "Jam": "08:00:00 WIB",
+                    "DateTime": "2026-09-11T01:00:00+00:00",
+                    "Coordinates": "-1.60,138.88", # Papua (di luar 1500km)
+                    "Lintang": "1.60 LS",
+                    "Bujur": "138.88 BT",
+                    "Magnitude": "5.1",
+                    "Kedalaman": "10 km",
+                    "Wilayah": "Papua",
+                    "Potensi": "Tidak berpotensi tsunami"
+                },
+                {
+                    "Tanggal": "12 Sep 2026",
+                    "Jam": "08:00:00 WIB",
+                    "DateTime": "2026-09-12T01:00:00+00:00",
+                    "Coordinates": "2.09,97.11", # Nias (sekitar 470km dari Padang)
+                    "Lintang": "2.09 LU",
+                    "Bujur": "97.11 BT",
+                    "Magnitude": "5.1",
+                    "Kedalaman": "10 km",
+                    "Wilayah": "Nias",
+                    "Potensi": "Tidak berpotensi tsunami"
+                }
+            ]
+        }
+    }
 
-    class FakeResponse:
-        def __enter__(self):
-            return self
+    async def mock_fetch(client, url):
+        if "autogempa.json" in url:
+            return payload_utama
+        elif "gempaterkini.json" in url:
+            return payload_regional
+        return None
 
-        def __exit__(self, *_args):
-            return False
-
-        def read(self):
-            return json.dumps(payload).encode("utf-8")
-
-    with patch("app.api.endpoints.bmkg.urllib.request.urlopen", return_value=FakeResponse()):
+    with patch("app.api.endpoints.bmkg.fetch_bmkg_data", side_effect=mock_fetch):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             res = await client.get("/api/v1/status/bmkg")
 
@@ -225,8 +258,10 @@ async def test_bmkg_status_uses_explicit_live_metadata():
     assert data["data_status"] == "live"
     assert data["fetched_at"]
     assert data["source"].startswith("BMKG")
-
-
+    assert data["regional_event"] is not None
+    assert data["regional_event"]["wilayah"] == "Nias"
+    assert data["regional_data_status"] == "live"
+    assert data["regional_event"]["distance_km_from_padang"] < 1500.0
 @pytest.mark.anyio
 async def test_occupancy_requires_checkin_and_returns_crowd_status():
     headers = {"X-Device-ID": "DEVICE-OCCUPANCY-01"}
@@ -267,14 +302,92 @@ async def test_occupancy_requires_checkin_and_returns_crowd_status():
 async def test_bmkg_unavailable_is_not_reported_as_live_data():
     """Gangguan BMKG tanpa cache harus jujur menghasilkan status 503."""
     bmkg.bmkg_cache["data"] = None
-    bmkg.bmkg_cache["last_fetched"] = 0.0
-    with patch("app.api.endpoints.bmkg.urllib.request.urlopen", side_effect=TimeoutError()):
+    bmkg.bmkg_cache["last_fetched_utama"] = 0.0
+    bmkg.bmkg_cache["last_fetched_regional"] = 0.0
+
+    async def mock_fetch(client, url):
+        return None # mensimulasikan TimeoutError/Kegagalan
+
+    with patch("app.api.endpoints.bmkg.fetch_bmkg_data", side_effect=mock_fetch):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             res = await client.get("/api/v1/status/bmkg")
 
     assert res.status_code == 503
     assert "tidak tersedia" in res.json()["detail"]
 
+@pytest.mark.anyio
+async def test_bmkg_secondary_failure():
+    """Kegagalan sumber sekunder tidak boleh menjatuhkan balikan utama."""
+    bmkg.bmkg_cache["data"] = None
+    bmkg.bmkg_cache["last_fetched_utama"] = 0.0
+    bmkg.bmkg_cache["last_fetched_regional"] = 0.0
+
+    payload_utama = {
+        "Infogempa": {
+            "gempa": {
+                "Coordinates": "-0.95,100.35",
+                "Wilayah": "Utama",
+            }
+        }
+    }
+
+    async def mock_fetch(client, url):
+        if "autogempa.json" in url:
+            return payload_utama
+        elif "gempaterkini.json" in url:
+            return None # Gagal
+        return None
+
+    with patch("app.api.endpoints.bmkg.fetch_bmkg_data", side_effect=mock_fetch):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            res = await client.get("/api/v1/status/bmkg")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["wilayah"] == "Utama"
+    assert data["regional_event"] is None
+    assert data["regional_data_status"] == "failed"
+
+@pytest.mark.anyio
+async def test_bmkg_regional_empty_or_corrupted():
+    """Koordinat rusak atau daftar kosong tidak menjatuhkan respons."""
+    bmkg.bmkg_cache["data"] = None
+    bmkg.bmkg_cache["last_fetched_utama"] = 0.0
+    bmkg.bmkg_cache["last_fetched_regional"] = 0.0
+
+    payload_utama = {
+        "Infogempa": { "gempa": { "Coordinates": "0.0,0.0" } }
+    }
+    payload_regional = {
+        "Infogempa": {
+            "gempa": [
+                {
+                    "Coordinates": "rusak,rusak",
+                    "Wilayah": "Rusak"
+                },
+                {
+                    "Coordinates": "-1.60,138.88", # Papua (jauh)
+                    "Wilayah": "Papua"
+                }
+            ]
+        }
+    }
+
+    async def mock_fetch(client, url):
+        if "autogempa.json" in url:
+            return payload_utama
+        elif "gempaterkini.json" in url:
+            return payload_regional
+        return None
+
+    with patch("app.api.endpoints.bmkg.fetch_bmkg_data", side_effect=mock_fetch):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            res = await client.get("/api/v1/status/bmkg")
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["regional_event"] is None
+    assert data["regional_data_status"] == "live"
 @pytest.mark.anyio
 async def test_admin_events_require_token():
     """Endpoint admin harus menolak request tanpa token yang valid."""
