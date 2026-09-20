@@ -61,6 +61,7 @@ class BmkgApiClient(
             depth = json.optString("kedalaman"),
             region = json.optString("wilayah"),
             potential = json.optString("potensi"),
+            isoDateTime = json.optString("datetime").takeIf { it.isNotBlank() },
             distanceKmFromPadang = json.optDouble("distance_km_from_padang", 0.0),
             epicenter = parseEpicenter(json.optString("coordinates")),
         )

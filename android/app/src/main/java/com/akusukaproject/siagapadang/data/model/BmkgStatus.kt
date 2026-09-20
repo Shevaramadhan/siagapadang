@@ -12,6 +12,8 @@ data class RegionalEarthquake(
     val region: String,
     val potential: String,
     val distanceKmFromPadang: Double,
+    /** Waktu kejadian dalam format ISO dari BMKG; dipakai menghitung umur kabar. */
+    val isoDateTime: String? = null,
     val epicenter: GeoCoordinate? = null,
 )
 

@@ -1264,7 +1264,7 @@ private fun RegionalEarthquakeBlock(regional: RegionalEarthquake) {
             verticalArrangement = Arrangement.spacedBy(3.dp),
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.Top) {
                 Icon(
                     painterResource(R.drawable.ic_ms_location_on),
                     contentDescription = null,
@@ -1272,12 +1272,23 @@ private fun RegionalEarthquakeBlock(regional: RegionalEarthquake) {
                     modifier = Modifier.size(15.dp),
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Gempa terdekat dari Padang",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = SiagaRustDeep,
-                )
+                Column {
+                    Text(
+                        text = "Gempa M5,0+ terdekat dari Padang",
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = SiagaRustDeep,
+                    )
+                    // Cakupan sumbernya disebut supaya "terdekat" tidak terbaca sebagai "dekat".
+                    Text(
+                        text = "Dari 15 kejadian terakhir BMKG se-Indonesia",
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = SiagaTextSecondary,
+                    )
+                }
             }
             Text(
                 text = regional.region,
@@ -1285,15 +1296,26 @@ private fun RegionalEarthquakeBlock(regional: RegionalEarthquake) {
                 lineHeight = 17.sp,
                 fontWeight = FontWeight.SemiBold,
             )
+            // Kedalaman diberi label. Tanpa itu "376 km" berdiri tepat di sebelah jarak dan
+            // terbaca seolah gempanya berjarak dua angka berbeda.
             Text(
                 text = listOfNotNull(
                     "M${regional.magnitude}".takeIf { regional.magnitude.isNotBlank() },
-                    regional.depth.takeIf { it.isNotBlank() },
                     "±${regional.distanceKmFromPadang.toInt()} km dari Padang",
+                    regional.depth.takeIf { it.isNotBlank() }?.let { "kedalaman $it" },
+                ).joinToString(" · "),
+                color = SiagaTextSecondary,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = listOfNotNull(
                     listOf(regional.eventDate, regional.eventTime)
                         .filter { it.isNotBlank() }
                         .joinToString(" ")
                         .takeIf { it.isNotBlank() },
+                    relativeDayLabel(regional.isoDateTime),
                 ).joinToString(" · "),
                 color = SiagaTextSecondary,
                 fontSize = 12.sp,
@@ -1310,6 +1332,49 @@ private fun RegionalEarthquakeBlock(regional: RegionalEarthquake) {
                 )
             }
         }
+    }
+}
+
+/**
+ * "8 hari lalu" untuk kejadian yang sudah lewat. Gempa regional terdekat bisa berumur beberapa
+ * hari, dan tanpa keterangan ini mudah dikira baru saja terjadi.
+ */
+private fun relativeDayLabel(isoDateTime: String?): String? {
+    val cleaned = isoDateTime?.takeIf { it.isNotBlank() } ?: return null
+    val occurredAt = runCatching {
+        val normalised = cleaned.replace("Z", "+00:00")
+        // Dicari maju dari posisi 19, yaitu tepat setelah detik, supaya tanda hubung pada
+        // tanggal tidak ikut terbaca sebagai penanda zona waktu.
+        val offsetIndex = normalised.indexOfAny(charArrayOf('+', '-'), startIndex = 19)
+        val base = if (offsetIndex > 0) normalised.substring(0, offsetIndex) else normalised
+        val offsetMinutes = if (offsetIndex > 0) {
+            val sign = if (normalised[offsetIndex] == '-') -1 else 1
+            val parts = normalised.substring(offsetIndex + 1).split(":")
+            sign * (parts[0].toInt() * 60 + (parts.getOrNull(1)?.toInt() ?: 0))
+        } else {
+            0
+        }
+        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+        calendar.clear()
+        calendar.set(
+            base.substring(0, 4).toInt(),
+            base.substring(5, 7).toInt() - 1,
+            base.substring(8, 10).toInt(),
+            base.substring(11, 13).toInt(),
+            base.substring(14, 16).toInt(),
+            base.substring(17, 19).toInt(),
+        )
+        calendar.timeInMillis - offsetMinutes * 60_000L
+    }.getOrNull() ?: return null
+
+    val elapsedMillis = System.currentTimeMillis() - occurredAt
+    if (elapsedMillis < 0) return null
+    val days = (elapsedMillis / 86_400_000L).toInt()
+    val hours = (elapsedMillis / 3_600_000L).toInt()
+    return when {
+        days >= 1 -> "$days hari lalu"
+        hours >= 1 -> "$hours jam lalu"
+        else -> "kurang dari sejam lalu"
     }
 }
 
