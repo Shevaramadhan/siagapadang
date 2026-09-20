@@ -183,6 +183,7 @@ fun OfflineMap(
         )
     }
     val cameraTracker = remember { CameraTracker() }
+    val overlayTracker = remember { OverlayTracker() }
     val mapView = remember {
         val mapOptions = MapLibreMapOptions.createFromAttributes(context)
             .textureMode(true)
@@ -260,6 +261,9 @@ fun OfflineMap(
                         offlineRoadOverlayTracker = cameraTracker,
                     )
                     updateFacilityOverlay(style, latestFacilities.value, latestSelectedFacility.value)
+                    // Gaya baru berarti seluruh sumber hilang, jadi pembanding dikosongkan agar
+                    // pembaruan berikutnya membangun ulang lapisannya.
+                    overlayTracker.snapshot = null
                     map.cameraPosition.target?.let { target ->
                         latestOnViewportChanged.value(target.toGeoCoordinate())
                     }
@@ -324,8 +328,11 @@ fun OfflineMap(
                 // Saat ketuk ganda dipakai untuk memperbesar panel, zoom bawaan dimatikan agar tidak bentrok.
                 map.uiSettings.isDoubleTapGesturesEnabled = onMapDoubleTap == null
                 map.style?.let { style ->
-                    updateMapOverlays(
-                        style = style,
+                    // Layar evakuasi disusun ulang terus-menerus — arah kompas berubah pada laju
+                    // sensor dan hitung mundur setiap detik. Tanpa pembanding ini seluruh GeoJSON
+                    // (rute, 73 poligon zona, jaringan jalan, penanda) ditulis ulang setiap kali,
+                    // thread utama tersita, dan sentuhan pengguna terlewat.
+                    val snapshot = OverlaySnapshot(
                         offlineRoadOverlay = offlineRoadOverlay,
                         isNetworkAvailable = isNetworkAvailable,
                         tsunamiZoneOverlay = tsunamiZoneOverlay,
@@ -336,10 +343,28 @@ fun OfflineMap(
                         currentLocation = currentLocation,
                         destinationLocation = destinationLocation,
                         destinationAnnotationBitmap = destinationAnnotationBitmap,
-                        userMarkerBitmap = userMarkerBitmap,
-                        offlineRoadOverlayTracker = cameraTracker,
+                        facilityMarkers = facilityMarkers,
+                        selectedFacilityId = selectedFacilityId,
                     )
-                    updateFacilityOverlay(style, facilityMarkers, selectedFacilityId)
+                    if (overlayTracker.snapshot != snapshot) {
+                        overlayTracker.snapshot = snapshot
+                        updateMapOverlays(
+                            style = style,
+                            offlineRoadOverlay = offlineRoadOverlay,
+                            isNetworkAvailable = isNetworkAvailable,
+                            tsunamiZoneOverlay = tsunamiZoneOverlay,
+                            routeCoordinates = displayRouteCoordinates,
+                            approachRouteCoordinates = approachRouteCoordinates,
+                            approachTargetLocation = approachTargetLocation,
+                            previousRouteCoordinates = displayPreviousRouteCoordinates,
+                            currentLocation = currentLocation,
+                            destinationLocation = destinationLocation,
+                            destinationAnnotationBitmap = destinationAnnotationBitmap,
+                            userMarkerBitmap = userMarkerBitmap,
+                            offlineRoadOverlayTracker = cameraTracker,
+                        )
+                        updateFacilityOverlay(style, facilityMarkers, selectedFacilityId)
+                    }
                 }
                 if (focusRequest != cameraTracker.focusRequest && focusCoordinates.isNotEmpty()) {
                     showFocus(map, focusCoordinates, focusBottomPaddingPx)
@@ -968,6 +993,29 @@ private fun fitText(text: String, paint: Paint, maxWidth: Float): String {
         end--
     }
     return text.substring(0, end).trimEnd() + ellipsis
+}
+
+/**
+ * Pembanding isi lapisan peta. Selama seluruh isinya masih rujukan yang sama, perbandingan ini
+ * berhenti pada pemeriksaan identitas, jauh lebih murah daripada menulis ulang sumber GeoJSON.
+ */
+private data class OverlaySnapshot(
+    val offlineRoadOverlay: OfflineRoadOverlay?,
+    val isNetworkAvailable: Boolean?,
+    val tsunamiZoneOverlay: TsunamiZoneOverlay?,
+    val routeCoordinates: List<GeoCoordinate>,
+    val approachRouteCoordinates: List<GeoCoordinate>,
+    val approachTargetLocation: GeoCoordinate?,
+    val previousRouteCoordinates: List<List<GeoCoordinate>>,
+    val currentLocation: GeoCoordinate?,
+    val destinationLocation: GeoCoordinate?,
+    val destinationAnnotationBitmap: Bitmap,
+    val facilityMarkers: List<Facility>,
+    val selectedFacilityId: String?,
+)
+
+private class OverlayTracker {
+    var snapshot: OverlaySnapshot? = null
 }
 
 private class CameraTracker {

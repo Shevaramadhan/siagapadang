@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import com.akusukaproject.siagapadang.ui.theme.SiagaTailGray
+import com.akusukaproject.siagapadang.ui.theme.SiagaRustDeep
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import com.akusukaproject.siagapadang.ui.theme.SiagaTextSecondary
@@ -108,6 +110,7 @@ import com.akusukaproject.siagapadang.data.model.BmkgStatus
 import com.akusukaproject.siagapadang.data.model.EvacuationRoute
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
 import com.akusukaproject.siagapadang.data.model.InundationZoneStatus
+import com.akusukaproject.siagapadang.domain.EarthquakeRelevance
 import com.akusukaproject.siagapadang.domain.ManeuverGuidance
 import com.akusukaproject.siagapadang.domain.ManeuverType
 import com.akusukaproject.siagapadang.domain.BearingCalculator
@@ -506,6 +509,9 @@ private fun EvacuationContent(
 
     state.bmkgStatus
         ?.takeIf { it.hasTsunamiPotential && !it.isStale }
+        // BMKG menerbitkan satu gempa terbaru untuk seluruh Indonesia. Gempa yang terlalu jauh
+        // tidak memicu layar penuh, tetapi tetap terbaca pada kartu status beserta jaraknya.
+        ?.takeIf { EarthquakeRelevance.shouldShowFullScreenAlert(it.epicenter, state.currentLocation) }
         ?.takeIf { it.fetchedAt != acknowledgedBmkgAlertId }
         ?.let { status ->
             BmkgTsunamiAlertDialog(
@@ -1170,15 +1176,25 @@ private fun StatusDetailCard(
                 state.isLoadingBmkgStatus -> "Mengambil data resmi BMKG."
                 state.bmkgErrorMessage != null ->
                     "Info gempa belum dapat diperbarui. Rute evakuasi tetap aktif."
-                bmkg != null -> listOfNotNull(
-                    bmkg.region.takeIf { it.isNotBlank() },
-                    bmkg.potential.takeIf { it.contains("tsunami", ignoreCase = true) },
-                    listOf(bmkg.eventDate, bmkg.eventTime)
-                        .filter { it.isNotBlank() }
-                        .joinToString(" ")
-                        .takeIf { it.isNotBlank() },
-                    "Sumber: BMKG",
-                ).joinToString("\n")
+                bmkg != null -> {
+                    val distanceKm = EarthquakeRelevance.distanceKm(bmkg.epicenter, state.currentLocation)
+                    val isFarAway = distanceKm != null && distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
+                    listOfNotNull(
+                        bmkg.region.takeIf { it.isNotBlank() },
+                        EarthquakeRelevance.distanceLabel(
+                            distanceKm = distanceKm,
+                            usingUserLocation = state.currentLocation != null,
+                        ),
+                        bmkg.potential.takeIf { it.contains("tsunami", ignoreCase = true) },
+                        "Jaraknya jauh dari Padang, jadi tidak ditampilkan sebagai peringatan."
+                            .takeIf { isFarAway && bmkg.hasTsunamiPotential },
+                        listOf(bmkg.eventDate, bmkg.eventTime)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ")
+                            .takeIf { it.isNotBlank() },
+                        "Sumber: BMKG",
+                    ).joinToString("\n")
+                }
                 else -> "Hubungkan ke internet untuk memperbarui info gempa."
             }
             color = bmkgStatusColor(state)
@@ -1799,51 +1815,27 @@ private fun EvacuationMapPanel(
             onMapDoubleTap = if (expansionProgress < 0.5f) onExpandMap else null,
         )
 
-        if (expansionProgress < 0.5f) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy((7f * scale).dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(
-                        start = (12f * scale).dp,
-                        bottom = (82f * scale).dp,
-                    )
-                    .zIndex(8f),
-            ) {
-                if (state.tsunamiZoneOverlay != null) {
-                    CompactTsunamiZoneIcon(scale = scale)
-                }
-                if (state.previousRoutes.isNotEmpty() || routeChangeNotice != null) {
-                    CompactRouteHistoryIcon(
-                        routeCount = state.previousRoutes.size,
-                        routeJustChanged = routeChangeNotice != null,
-                        scale = scale,
-                    )
-                }
-            }
-        } else if (
+        // Satu susunan untuk kedua mode peta. Sebelumnya mode kecil memakai ikon bulat dan mode
+        // besar memakai pil, sehingga keterangan yang sama tampil dengan dua bentuk berbeda.
+        if (
             state.tsunamiZoneOverlay != null ||
             state.previousRoutes.isNotEmpty() ||
             routeChangeNotice != null
         ) {
             Column(
-                verticalArrangement = Arrangement.spacedBy((6f * scale).dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(
-                        start = (12f * scale).dp,
-                        bottom = (80f * scale).dp,
-                    )
+                    .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
                     .zIndex(8f),
             ) {
                 if (state.tsunamiZoneOverlay != null) {
-                    TsunamiZoneLegend(scale = scale)
+                    ZoneStatusPill(status = state.currentZoneStatus)
                 }
                 if (routeChangeNotice != null) {
                     RouteChangeNotice(message = routeChangeNotice.orEmpty(), scale = scale)
                 } else if (state.previousRoutes.isNotEmpty()) {
-                    PreviousRoutesLegend(routes = state.previousRoutes, scale = scale)
+                    PreviousRoutesPill(routes = state.previousRoutes)
                 }
             }
         }
@@ -1931,35 +1923,6 @@ private fun EvacuationMapPanel(
     }
 }
 
-@Composable
-private fun CompactTsunamiZoneIcon(
-    scale: Float,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        color = Color.White,
-        shape = CircleShape,
-        shadowElevation = 4.dp,
-        modifier = modifier
-            .size(44.dp)
-            .semantics { contentDescription = "Lapisan zona tsunami aktif" },
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier.padding(11.dp),
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
-                ZoneSwatch(ZoneLegendEntry.SAFE, Modifier.weight(1f))
-                ZoneSwatch(ZoneLegendEntry.LOW, Modifier.weight(1f))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
-                ZoneSwatch(ZoneLegendEntry.MEDIUM, Modifier.weight(1f))
-                ZoneSwatch(ZoneLegendEntry.HIGH, Modifier.weight(1f))
-            }
-        }
-    }
-}
-
 /** Warna isian dan tepi sama dengan lapisan zona di peta. */
 private enum class ZoneLegendEntry(val label: String, val fill: Color, val mapOpacity: Float, val outline: Color, val outlineWidth: Float) {
     SAFE("Kawasan aman", ZONE_SAFE_COLOR, ZONE_SAFE_MAP_OPACITY, Color(0xFF00A152), 1.5f),
@@ -1977,72 +1940,6 @@ private fun ZoneSwatch(entry: ZoneLegendEntry, modifier: Modifier = Modifier) {
             .background(zoneLegendDisplayColor(entry.fill, entry.mapOpacity))
             .border(entry.outlineWidth.dp, entry.outline, RoundedCornerShape(3.dp)),
     )
-}
-
-@Composable
-private fun CompactRouteHistoryIcon(
-    routeCount: Int,
-    routeJustChanged: Boolean,
-    scale: Float,
-    modifier: Modifier = Modifier,
-) {
-    val accentColor = if (routeJustChanged) SiagaNextGreen else Color(0xFFB7BEC1)
-    Surface(
-        color = SiagaNavy.copy(alpha = 0.92f),
-        shape = CircleShape,
-        border = BorderStroke(1.dp, accentColor),
-        shadowElevation = 4.dp,
-        modifier = modifier
-            .size((39f * scale).dp)
-            .semantics {
-                contentDescription = if (routeJustChanged) {
-                    "Rute alternatif baru dipilih"
-                } else {
-                    "$routeCount rute sebelumnya tersedia"
-                }
-            },
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.size((23f * scale).dp)) {
-                val stroke = size.minDimension * 0.13f
-                drawLine(
-                    color = accentColor,
-                    start = Offset(size.width * 0.18f, size.height * 0.77f),
-                    end = Offset(size.width * 0.45f, size.height * 0.50f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round,
-                )
-                drawLine(
-                    color = accentColor,
-                    start = Offset(size.width * 0.45f, size.height * 0.50f),
-                    end = Offset(size.width * 0.76f, size.height * 0.22f),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round,
-                )
-                drawCircle(accentColor, radius = stroke, center = Offset(size.width * 0.18f, size.height * 0.77f))
-                drawCircle(accentColor, radius = stroke, center = Offset(size.width * 0.76f, size.height * 0.22f))
-            }
-            if (routeCount > 0) {
-                Surface(
-                    color = accentColor,
-                    contentColor = SiagaNavy,
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size((15f * scale).dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = routeCount.toString(),
-                            fontSize = (8f * scale).sp,
-                            lineHeight = (8f * scale).sp,
-                            fontWeight = FontWeight.Black,
-                        )
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -2116,47 +2013,86 @@ private fun ZoneStatusNotice(
 }
 
 @Composable
-private fun TsunamiZoneLegend(
-    scale: Float,
+private fun ZoneStatusPill(
+    status: InundationZoneStatus?,
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val appearance = zoneStatusAppearance(status)
     Surface(
         color = Color.White,
         contentColor = SiagaNavy,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         shadowElevation = 6.dp,
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(role = Role.Button) { expanded = !expanded }
             .animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS))
             .semantics {
-                contentDescription = if (expanded) "Ciutkan keterangan zona tsunami" else "Buka keterangan zona tsunami"
+                contentDescription = if (expanded) {
+                    "Ciutkan keterangan warna zona"
+                } else {
+                    "${appearance.label}. Buka keterangan warna zona"
+                }
             },
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Zona tsunami", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(appearance.dotColor),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = appearance.label,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
                 Spacer(Modifier.width(8.dp))
-                if (!expanded) {
-                    ZoneLegendEntry.entries.forEach { entry ->
-                        ZoneSwatch(entry, Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                    }
-                }
                 Icon(
                     painterResource(if (expanded) R.drawable.ic_ms_expand_more else R.drawable.ic_ms_expand_less),
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
             if (expanded) {
-                ZoneLegendEntry.entries.forEach { entry -> ZoneLegendItem(entry) }
+                Text(
+                    text = "Warna pada peta",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SiagaTextSecondary,
+                )
+                ZoneLegendEntry.entries.forEach { legend -> ZoneLegendItem(legend) }
             }
         }
+    }
+}
+
+private class ZoneStatusAppearance(val label: String, val dotColor: Color)
+
+/**
+ * Label mengikuti nilai `tingkat_bahaya` pada basis data: Rendah, Sedang, Tinggi. Posisi yang
+ * hanya diketahui berisiko lewat penanda simpul tidak diberi tingkat, karena tingkatnya memang
+ * tidak diketahui.
+ */
+private fun zoneStatusAppearance(status: InundationZoneStatus?): ZoneStatusAppearance = when (status) {
+    null, InundationZoneStatus.DataUnavailable ->
+        ZoneStatusAppearance("Status zona belum dipastikan", SiagaTailGray)
+    InundationZoneStatus.OutsideRecordedZone ->
+        ZoneStatusAppearance("Di luar zona rendaman", ZoneLegendEntry.SAFE.outline)
+    is InundationZoneStatus.InsideRecordedZone -> when (status.dangerLevel.trim().lowercase()) {
+        "tinggi" -> ZoneStatusAppearance("Zona bahaya tinggi", ZoneLegendEntry.HIGH.outline)
+        "sedang" -> ZoneStatusAppearance("Zona bahaya sedang", ZoneLegendEntry.MEDIUM.outline)
+        "rendah" -> ZoneStatusAppearance("Zona bahaya rendah", ZoneLegendEntry.LOW.outline)
+        else -> ZoneStatusAppearance("Di dalam zona risiko tsunami", SiagaRustDeep)
     }
 }
 
@@ -2170,98 +2106,88 @@ private fun ZoneLegendItem(entry: ZoneLegendEntry) {
 }
 
 @Composable
-private fun PreviousRoutesLegend(
+private fun PreviousRoutesPill(
     routes: List<EvacuationRoute>,
-    scale: Float,
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    Column(
-        verticalArrangement = Arrangement.spacedBy((6f * scale).dp),
-        modifier = modifier,
+    Surface(
+        color = Color.White,
+        contentColor = SiagaNavy,
+        shape = RoundedCornerShape(20.dp),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(role = Role.Button) { expanded = !expanded }
+            .animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS))
+            .semantics {
+                contentDescription = if (expanded) {
+                    "Ciutkan daftar rute sebelumnya"
+                } else {
+                    "Buka daftar ${routes.size} rute sebelumnya"
+                }
+            },
     ) {
-        Surface(
-            color = SiagaNavy.copy(alpha = 0.90f),
-            contentColor = SiagaCream,
-            shape = RoundedCornerShape((9f * scale).dp),
-            shadowElevation = 3.dp,
-            modifier = Modifier
-                .clickable(role = Role.Button) { expanded = !expanded }
-                .semantics {
-                    contentDescription = if (expanded) {
-                        "Ciutkan daftar rute sebelumnya"
-                    } else {
-                        "Buka ${routes.size} rute sebelumnya"
-                    }
-                },
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy((8f * scale).dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(
-                    horizontal = (10f * scale).dp,
-                    vertical = (7f * scale).dp,
-                ),
-            ) {
-                Surface(
-                    color = Color(0xFF8C9497),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .width((24f * scale).dp)
-                        .height((4f * scale).dp),
-                ) {}
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PreviousRouteDash()
+                Spacer(Modifier.width(10.dp))
                 Text(
                     text = "Rute sebelumnya (${routes.size})",
-                    fontSize = (11f * scale).sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
                 )
-                Text(
-                    text = if (expanded) "−" else "+",
-                    fontSize = (14f * scale).sp,
-                    fontWeight = FontWeight.Black,
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    painterResource(if (expanded) R.drawable.ic_ms_expand_more else R.drawable.ic_ms_expand_less),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
                 )
             }
-        }
-        if (expanded) {
-            routes.forEachIndexed { index, route ->
-                Surface(
-                    color = SiagaNavy.copy(alpha = 0.88f),
-                    contentColor = SiagaCream,
-                    shape = RoundedCornerShape((8f * scale).dp),
-                    shadowElevation = 3.dp,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy((8f * scale).dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(
-                            horizontal = (10f * scale).dp,
-                            vertical = (7f * scale).dp,
-                        ),
-                    ) {
-                        Surface(
-                            color = Color(0xFF8C9497),
-                            shape = CircleShape,
-                            modifier = Modifier
-                                .width((24f * scale).dp)
-                                .height((4f * scale).dp),
-                        ) {}
-                        Text(
-                            text = buildString {
-                                append(if (index == 0) "Rute utama" else "Alternatif $index")
-                                append(" · ±")
-                                append(estimatedMinutes(route))
-                                append(" menit")
-                            },
-                            fontSize = (11f * scale).sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                        )
+            if (expanded) {
+                Text(
+                    text = "Tergambar samar di peta sebagai pembanding. Rute ini tidak dipakai lagi.",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = SiagaTextSecondary,
+                )
+                routes.forEachIndexed { index, route ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PreviousRouteDash()
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = if (index == 0) "Rute utama" else "Alternatif $index",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = "${route.destinationName} · ±${estimatedMinutes(route)} menit",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = SiagaTextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun PreviousRouteDash() {
+    Box(
+        modifier = Modifier
+            .size(width = 22.dp, height = 4.dp)
+            .clip(CircleShape)
+            .background(SiagaTailGray),
+    )
 }
 
 @Composable

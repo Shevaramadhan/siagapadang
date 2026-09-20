@@ -1,6 +1,7 @@
 package com.akusukaproject.siagapadang.data.remote
 
 import com.akusukaproject.siagapadang.data.model.BmkgStatus
+import com.akusukaproject.siagapadang.data.model.GeoCoordinate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -46,7 +47,18 @@ class BmkgApiClient(
         isStale = json.optString("data_status") == "stale",
         fetchedAt = json.optString("fetched_at"),
         source = json.optString("source", "BMKG"),
+        epicenter = parseEpicenter(json.optString("coordinates")),
     )
+
+    /** BMKG mengirim "coordinates" sebagai "lintang,bujur", misalnya "-8.05,120.86". */
+    private fun parseEpicenter(raw: String?): GeoCoordinate? {
+        val parts = raw?.split(",") ?: return null
+        if (parts.size != 2) return null
+        val latitude = parts[0].trim().toDoubleOrNull() ?: return null
+        val longitude = parts[1].trim().toDoubleOrNull() ?: return null
+        if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return null
+        return GeoCoordinate(latitude, longitude)
+    }
 
     private companion object {
         const val CONNECT_TIMEOUT_MILLIS = 1_000
