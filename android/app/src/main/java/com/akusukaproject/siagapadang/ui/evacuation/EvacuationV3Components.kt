@@ -18,6 +18,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -526,8 +534,13 @@ internal fun ObstacleSheet(
     onDismiss: () -> Unit,
     onSelect: (EvacuationObstacleType) -> Unit,
 ) {
-    val visibleState = remember { MutableTransitionState(false) }.apply { targetState = true }
+    // targetState disetel sekali lewat LaunchedEffect. Kalau disetel langsung saat komposisi,
+    // setiap recomposition akan membatalkan penutupan dan lembar ini tidak pernah bisa ditutup.
+    val visibleState = remember { MutableTransitionState(false) }
+    LaunchedEffect(Unit) { visibleState.targetState = true }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val dragOffset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
     fun close(action: () -> Unit) {
         pendingAction = action
         visibleState.targetState = false
@@ -556,7 +569,29 @@ internal fun ObstacleSheet(
                     color = Color.White,
                     contentColor = SiagaNavy,
                     shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(0, dragOffset.value.roundToInt()) }
+                        // Diseret ke bawah melewati 96 dp berarti ditutup; kurang dari itu kembali ke tempatnya.
+                        .pointerInput(Unit) {
+                            val dismissThreshold = 96.dp.toPx()
+                            detectVerticalDragGestures(
+                                onVerticalDrag = { change, delta ->
+                                    change.consume()
+                                    scope.launch { dragOffset.snapTo((dragOffset.value + delta).coerceAtLeast(0f)) }
+                                },
+                                onDragEnd = {
+                                    if (dragOffset.value > dismissThreshold) {
+                                        close(onDismiss)
+                                    } else {
+                                        scope.launch { dragOffset.animateTo(0f, tween(UI_ANIMATION_MILLIS, easing = FastOutSlowInEasing)) }
+                                    }
+                                },
+                                onDragCancel = {
+                                    scope.launch { dragOffset.animateTo(0f, tween(UI_ANIMATION_MILLIS, easing = FastOutSlowInEasing)) }
+                                },
+                            )
+                        },
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
