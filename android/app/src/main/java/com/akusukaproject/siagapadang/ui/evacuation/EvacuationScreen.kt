@@ -108,6 +108,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akusukaproject.siagapadang.R
 import com.akusukaproject.siagapadang.data.model.BmkgStatus
+import com.akusukaproject.siagapadang.data.model.RegionalEarthquake
 import com.akusukaproject.siagapadang.data.model.EvacuationRoute
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
 import com.akusukaproject.siagapadang.data.model.InundationZoneStatus
@@ -1174,62 +1175,6 @@ private fun BmkgDetailBody(
     val isFarAway = distanceKm != null && distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
-        // --- Gempa Regional (khusus Sumatera Barat) ---
-        status.regionalEvent?.let { regional ->
-            Surface(
-                color = Color(0xFFFFF3E0),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    Text(
-                        text = "\uD83D\uDCCD Gempa Terdekat dari Padang",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFE65100),
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = regional.region,
-                        color = SiagaNavy,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        lineHeight = 17.sp,
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "M${regional.magnitude} \u00b7 ${regional.depth} \u00b7 ~${regional.distanceKmFromPadang.toInt()} km dari Padang",
-                        color = SiagaNavy.copy(alpha = 0.85f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    if (regional.potential.isNotBlank()) {
-                        Text(
-                            text = regional.potential,
-                            color = SiagaNavy.copy(alpha = 0.75f),
-                            fontSize = 11.sp,
-                        )
-                    }
-                    val regionalTimestamp = listOf(regional.eventDate, regional.eventTime)
-                        .filter { it.isNotBlank() }.joinToString(" ")
-                    if (regionalTimestamp.isNotBlank()) {
-                        Text(
-                            text = regionalTimestamp,
-                            color = SiagaTextSecondary,
-                            fontSize = 10.sp,
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Gempa nasional terbaru:",
-                color = SiagaTextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
         // --- Gempa Nasional ---
         if (status.region.isNotBlank()) {
             Text(
@@ -1266,6 +1211,7 @@ private fun BmkgDetailBody(
                 emphasised = false,
             )
         }
+        status.regionalEvent?.let { regional -> RegionalEarthquakeBlock(regional) }
         val timestamp = listOf(status.eventDate, status.eventTime).filter { it.isNotBlank() }.joinToString(" ")
         Text(
             text = listOfNotNull(
@@ -1278,6 +1224,71 @@ private fun BmkgDetailBody(
             lineHeight = 15.sp,
             fontWeight = FontWeight.Medium,
         )
+    }
+}
+
+/**
+ * Gempa terdekat dari Padang menurut penyaringan peladen. Kejadiannya bisa jauh lebih lama
+ * daripada gempa nasional terbaru, jadi waktunya selalu ikut ditulis.
+ */
+@Composable
+private fun RegionalEarthquakeBlock(regional: RegionalEarthquake) {
+    Surface(
+        color = Color(0xFFFBE3D9),
+        contentColor = SiagaNavy,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painterResource(R.drawable.ic_ms_location_on),
+                    contentDescription = null,
+                    tint = SiagaRustDeep,
+                    modifier = Modifier.size(15.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Gempa terdekat dari Padang",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = SiagaRustDeep,
+                )
+            }
+            Text(
+                text = regional.region,
+                fontSize = 13.sp,
+                lineHeight = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = listOfNotNull(
+                    "M${regional.magnitude}".takeIf { regional.magnitude.isNotBlank() },
+                    regional.depth.takeIf { it.isNotBlank() },
+                    "±${regional.distanceKmFromPadang.toInt()} km dari Padang",
+                    listOf(regional.eventDate, regional.eventTime)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" ")
+                        .takeIf { it.isNotBlank() },
+                ).joinToString(" · "),
+                color = SiagaTextSecondary,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            if (regional.potential.isNotBlank()) {
+                Text(
+                    text = regional.potential,
+                    color = SiagaTextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
