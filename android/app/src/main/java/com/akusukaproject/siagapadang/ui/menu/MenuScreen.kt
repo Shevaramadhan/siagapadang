@@ -89,8 +89,17 @@ fun MenuScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("TES TUJUAN SAAT INI", fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
                 }
+                // Tanpa rute, penyebabnya bisa bermacam-macam. Menulis "menunggu posisi GPS"
+                // untuk semuanya keliru: pada keadaan di luar zona rendaman, posisi justru sudah
+                // diketahui dan rutenya memang sengaja tidak dihitung.
                 Text(
-                    text = route?.destinationName ?: "Menunggu posisi GPS",
+                    text = when {
+                        route != null -> route.destinationName
+                        state.isOutsideInundationZoneAtStart -> "Belum ada tujuan"
+                        state.currentLocation == null -> "Menunggu posisi GPS"
+                        state.isLoadingRoute -> "Menyiapkan rute"
+                        else -> "Tujuan belum tersedia"
+                    },
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )
@@ -104,7 +113,13 @@ fun MenuScreen(
                             .coerceAtLeast(1)
                         "Dari posisi Anda · ±$minutes menit berjalan cepat"
                     } else {
-                        "Tujuan muncul setelah lokasi diketahui."
+                        when {
+                            state.isOutsideInundationZoneAtStart ->
+                                "Anda berada di luar zona rendaman, jadi rute evakuasi tidak dihitung. Daftar TES dan TEA tetap dapat dibuka."
+                            state.currentLocation == null -> "Tujuan muncul setelah lokasi diketahui."
+                            state.isLoadingRoute -> "Sedang membaca rute dari data di HP ini."
+                            else -> state.errorMessage ?: "Tujuan belum dapat dihitung dari posisi Anda."
+                        }
                     },
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
