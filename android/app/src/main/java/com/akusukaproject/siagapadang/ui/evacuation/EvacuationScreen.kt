@@ -292,8 +292,11 @@ private fun EvacuationContent(
             },
         )
 
+        // Tombol berdiri tepat di garis batas antara kartu dan peta pada kedua mode: setengah
+        // badannya di kartu, setengah lagi di peta. Kotak gagangnya 48 dp, jadi titik tengahnya
+        // berada 24 dp di bawah tepi atas kotak.
         val handleTop = maxHeight - mapHeight +
-            lerp((-24f * scale).dp, EXPANDED_HEADER_HEIGHT - 40.dp, expansionProgress)
+            lerp((-24f * scale).dp, EXPANDED_HEADER_HEIGHT - 24.dp, expansionProgress)
         MapOpenHandle(
             expansionProgress = expansionProgress,
             dragState = mapPanelState,
@@ -2019,6 +2022,11 @@ private fun EvacuationMapPanel(
             currentLocation = state.currentLocation,
             destinationLocation = state.route?.destinationCoordinate,
             destinationName = state.route?.destinationName,
+            destinationKindLabel = state.route?.destinationKind,
+            destinationDurationLabel = (
+                state.directOrientation?.distanceMeters
+                    ?: state.guidance?.remainingDistanceMeters
+                )?.let { meters -> formatWalkingDuration(meters) },
             destinationDistanceLabel = state.directOrientation?.distanceMeters?.let(::formatDistance)
                 ?: state.guidance?.remainingDistanceMeters?.let(::formatDistance),
             deviceHeadingDegrees = state.deviceHeadingDegrees,
@@ -3595,6 +3603,12 @@ private fun estimatedMinutes(route: EvacuationRoute): Int =
 
 internal fun estimatedDistanceMeters(route: EvacuationRoute): Int =
     (route.estimatedSeconds * WALKING_SPEED_METERS_PER_SECOND).toInt().coerceAtLeast(0)
+
+/** Lama berjalan cepat pada 1,2 m/s sesuai SOP BPBD Kota Padang. */
+internal fun formatWalkingDuration(distanceMeters: Int): String {
+    val minutes = ceil(distanceMeters / WALKING_SPEED_METERS_PER_SECOND / 60.0).toInt().coerceAtLeast(1)
+    return "±$minutes mnt"
+}
 
 internal fun formatDistance(distanceMeters: Int): String = when {
     distanceMeters < 1_000 -> "${(distanceMeters / 10) * 10} m"

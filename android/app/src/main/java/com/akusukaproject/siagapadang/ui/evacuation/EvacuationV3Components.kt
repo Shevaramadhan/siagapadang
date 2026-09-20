@@ -90,6 +90,9 @@ import com.akusukaproject.siagapadang.ui.theme.SiagaWarning
 
 private val CardShape = RoundedCornerShape(28.dp)
 
+/** Merah tua yang tetap memenuhi kontras 4.5:1 di atas lingkaran putih. */
+private val BMKG_UNREAD_COLOR = Color(0xFFC62828)
+
 /** Satu putaran getaran: sekitar 0,4 detik bergetar lalu diam sampai detik ketiga. */
 private const val SHAKE_CYCLE_MILLIS = 3_000
 
@@ -158,7 +161,8 @@ internal fun EvacuationTopBar(
         Spacer(Modifier.width(6.dp))
         StatusCircle(
             iconRes = R.drawable.ic_ms_campaign,
-            tint = statusTintOnLight(bmkgStatusColor(state)),
+            // Merah selama kabarnya belum dibuka, agar bedanya terbaca tanpa menunggu getaran.
+            tint = if (bmkgIsUnread) BMKG_UNREAD_COLOR else statusTintOnLight(bmkgStatusColor(state)),
             hasProblem = bmkgHasProblem(state),
             selected = selected == StatusDetailType.BMKG,
             description = if (bmkgIsUnread) "Ada kabar gempa baru dari BMKG" else "Lihat informasi BMKG",
@@ -195,7 +199,8 @@ internal fun StatusColumnV3(
         )
         StatusCircle(
             iconRes = R.drawable.ic_ms_campaign,
-            tint = statusTintOnLight(bmkgStatusColor(state)),
+            // Merah selama kabarnya belum dibuka, agar bedanya terbaca tanpa menunggu getaran.
+            tint = if (bmkgIsUnread) BMKG_UNREAD_COLOR else statusTintOnLight(bmkgStatusColor(state)),
             hasProblem = bmkgHasProblem(state),
             selected = selected == StatusDetailType.BMKG,
             description = if (bmkgIsUnread) "Ada kabar gempa baru dari BMKG" else "Lihat informasi BMKG",

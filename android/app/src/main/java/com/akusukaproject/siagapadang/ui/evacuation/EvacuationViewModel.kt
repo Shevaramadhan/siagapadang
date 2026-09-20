@@ -13,6 +13,8 @@ import androidx.lifecycle.viewModelScope
 import com.akusukaproject.siagapadang.SiagaPadangApplication
 import com.akusukaproject.siagapadang.data.model.EvacuationRoute
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
+import com.akusukaproject.siagapadang.domain.OffRouteTracker
+import com.akusukaproject.siagapadang.sensor.DeviceLocation
 import com.akusukaproject.siagapadang.data.model.InundationZoneStatus
 import com.akusukaproject.siagapadang.data.remote.ApiHttpException
 import com.akusukaproject.siagapadang.data.remote.model.ObstructionReportRequestDto
@@ -68,6 +70,8 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
     private var pendingZoneConfirmationCount = 0
     private val countdownStartedAtElapsedMillis = SystemClock.elapsedRealtime()
     private val rejectedDestinationNames = mutableSetOf<String>()
+    private val offRouteTracker = OffRouteTracker()
+    private var rerouteJob: Job? = null
     private val arrivalTracker = ArrivalConfirmationTracker()
     private val zoneExitTracker = ZoneExitConfirmationTracker()
 
@@ -752,6 +756,7 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
                         if (arrivalConfirmedNow) onArrivalConfirmed()
                         if (!arrivalConfirmedNow) maybeVibrateUpcomingManeuver()
                         requestInitialRoute(deviceLocation.coordinate)
+                        maybeRecalculateRouteForNewPosition(deviceLocation)
                         evaluateCurrentZone(
                             location = deviceLocation.coordinate,
                             accuracyMeters = deviceLocation.accuracyMeters,
@@ -1068,6 +1073,72 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
         countdownJob?.cancel()
         countdownJob = null
         vibrateArrivalPattern()
+    }
+
+    /**
+     * Ketika pengguna sudah jauh meninggalkan jalur, arahan "kembali ke jalur" tidak lagi masuk
+     * akal — jaraknya bisa berkilometer. Rute dibaca ulang dari simpang terdekat dengan posisi
+     * sekarang. Ini murni pembacaan basis data prakomputasi, bukan pencarian lintasan.
+     *
+     * Pengalihan hanya dilakukan setelah beberapa pembaruan posisi berturut-turut sepakat, agar
+     * lompatan GPS sesaat tidak mengganti rute yang sedang diikuti.
+     */
+    private fun maybeRecalculateRouteForNewPosition(deviceLocation: DeviceLocation) {
+        val state = mutableUiState.value
+        val shouldSkip = state.hasArrived ||
+            state.route == null ||
+            state.directOrientation != null ||
+            state.isLoadingRoute ||
+            rerouteJob?.isActive == true
+        if (shouldSkip) {
+            offRouteTracker.reset()
+            return
+        }
+        val distanceFromRoute = state.guidance?.distanceFromRouteMeters ?: return
+        val shouldRecalculate = offRouteTracker.shouldRecalculate(
+            distanceFromRouteMeters = distanceFromRoute,
+            accuracyMeters = deviceLocation.accuracyMeters,
+        )
+        if (shouldRecalculate) recalculateRouteFromCurrentPosition(deviceLocation.coordinate)
+    }
+
+    private fun recalculateRouteFromCurrentPosition(location: GeoCoordinate) {
+        rerouteJob = viewModelScope.launch {
+            val currentRoute = mutableUiState.value.route ?: return@launch
+            val route = runCatching {
+                val nearest = repository.findRouteFromLocation(location)
+                if (nearest.destinationName in rejectedDestinationNames) {
+                    // Tujuan yang sudah ditolak pengguna tidak ditawarkan lagi.
+                    repository.findAlternativeRoute(
+                        location = location,
+                        currentRoute = currentRoute,
+                        excludedDestinationNames = rejectedDestinationNames,
+                    )
+                } else {
+                    nearest
+                }
+            }.getOrNull() ?: return@launch
+
+            if (route.originNodeId == currentRoute.originNodeId &&
+                route.destinationName == currentRoute.destinationName
+            ) {
+                return@launch
+            }
+            arrivalTracker.reset()
+            resetRouteProgress()
+            mutableUiState.update { state ->
+                if (state.hasArrived) return@update state
+                withGuidance(
+                    state.copy(
+                        route = route,
+                        isLoadingRoute = false,
+                        alternativeRouteMessage = "Rute disesuaikan dengan posisi Anda sekarang.",
+                        alternativeRouteVersion = state.alternativeRouteVersion + 1,
+                        errorMessage = null,
+                    ),
+                )
+            }
+        }
     }
 
     private fun resetRouteProgress() {

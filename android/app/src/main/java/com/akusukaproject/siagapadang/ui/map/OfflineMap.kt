@@ -116,6 +116,8 @@ fun OfflineMap(
     destinationLocation: GeoCoordinate?,
     destinationName: String?,
     destinationDistanceLabel: String?,
+    destinationKindLabel: String? = null,
+    destinationDurationLabel: String? = null,
     deviceHeadingDegrees: Float?,
     followUserLocation: Boolean,
     recenterRequest: Int,
@@ -166,6 +168,8 @@ fun OfflineMap(
     val latestDestination = rememberUpdatedState(destinationLocation)
     val latestDestinationName = rememberUpdatedState(destinationName)
     val latestDestinationDistance = rememberUpdatedState(destinationDistanceLabel)
+    val latestDestinationKind = rememberUpdatedState(destinationKindLabel)
+    val latestDestinationDuration = rememberUpdatedState(destinationDurationLabel)
     val latestHeading = rememberUpdatedState(deviceHeadingDegrees)
     val latestFollowUser = rememberUpdatedState(followUserLocation)
     val latestOnViewportChanged = rememberUpdatedState(onViewportChanged)
@@ -175,11 +179,15 @@ fun OfflineMap(
         context,
         destinationName,
         destinationDistanceLabel,
+        destinationKindLabel,
+        destinationDurationLabel,
     ) {
         createDestinationAnnotationBitmap(
             context = context,
             destinationName = destinationName ?: "Tujuan evakuasi",
             distanceLabel = destinationDistanceLabel.orEmpty(),
+            kindLabel = destinationKindLabel,
+            durationLabel = destinationDurationLabel,
         )
     }
     val cameraTracker = remember { CameraTracker() }
@@ -256,6 +264,8 @@ fun OfflineMap(
                             context = context,
                             destinationName = latestDestinationName.value ?: "Tujuan evakuasi",
                             distanceLabel = latestDestinationDistance.value.orEmpty(),
+                            kindLabel = latestDestinationKind.value,
+                            durationLabel = latestDestinationDuration.value,
                         ),
                         userMarkerBitmap = userMarkerBitmap,
                         offlineRoadOverlayTracker = cameraTracker,
@@ -918,12 +928,14 @@ private fun createDestinationAnnotationBitmap(
     context: Context,
     destinationName: String,
     distanceLabel: String,
+    kindLabel: String?,
+    durationLabel: String?,
 ): Bitmap {
     val density = context.resources.displayMetrics.density
     fun px(dp: Float): Float = dp * density
 
-    val width = px(180f).toInt()
-    val cardHeight = px(62f)
+    val width = px(208f).toInt()
+    val cardHeight = px(86f)
     val pointerHeight = px(10f)
     val pinSize = px(34f).toInt()
     val totalHeight = (cardHeight + pointerHeight + pinSize).toInt()
@@ -966,14 +978,44 @@ private fun createDestinationAnnotationBitmap(
     }
     val textStart = px(13f)
     val textWidth = width - px(26f)
+
+    // Lencana jenis fasilitas: kuning untuk TES (gedung), hijau untuk TEA (kawasan perbukitan).
+    var nameBaseline = px(25f)
+    if (!kindLabel.isNullOrBlank()) {
+        val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (kindLabel.uppercase() == "TEA") Color.rgb(88, 214, 141) else Color.rgb(247, 255, 12)
+            style = Paint.Style.FILL
+        }
+        val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(1, 52, 109)
+            textSize = px(10f)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val badgeText = kindLabel.uppercase()
+        val badgeWidth = badgeTextPaint.measureText(badgeText) + px(10f)
+        val badgeBounds = RectF(textStart, px(9f), textStart + badgeWidth, px(24f))
+        canvas.drawRoundRect(badgeBounds, px(4f), px(4f), badgePaint)
+        canvas.drawText(badgeText, textStart + px(5f), px(20f), badgeTextPaint)
+        nameBaseline = px(42f)
+    }
+
     canvas.drawText(
         fitText(destinationName.uppercase(), namePaint, textWidth),
         textStart,
-        px(25f),
+        nameBaseline,
         namePaint,
     )
-    if (distanceLabel.isNotBlank()) {
-        canvas.drawText("≈ $distanceLabel", textStart, px(48f), distancePaint)
+    val details = listOfNotNull(
+        distanceLabel.takeIf { it.isNotBlank() }?.let { "≈ $it" },
+        durationLabel?.takeIf { it.isNotBlank() },
+    )
+    if (details.isNotEmpty()) {
+        canvas.drawText(
+            fitText(details.joinToString(" · "), distancePaint, textWidth),
+            textStart,
+            nameBaseline + px(20f),
+            distancePaint,
+        )
     }
 
     context.getDrawable(R.drawable.ic_figma_destination)?.let { drawable ->
