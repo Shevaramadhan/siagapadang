@@ -1,6 +1,6 @@
 # Backlog Fitur SIAGA PADANG yang Belum Selesai
 
-Dokumen ini menjadi daftar kerja untuk pengembangan lanjutan SIAGA PADANG. Audit awal dilakukan pada branch `main`, commit `61bed05`, tanggal 14 September 2026. **Status diperbarui 20 September 2026** pada commit `6361710`, setelah P0, P1-01, P1-03, P1-04, F-07, dataset 2026.09.19, dan desain V3 digabung ke `main`.
+Dokumen ini menjadi daftar kerja untuk pengembangan lanjutan SIAGA PADANG. Audit awal dilakukan pada branch `main`, commit `61bed05`, tanggal 14 September 2026. **Status diperbarui 20 September 2026 sore** pada commit `11740af`, setelah P0, P1-01, P1-03, P1-04, F-07, dataset 2026.09.19, dan desain V3 digabung ke `main`.
 
 Dokumen ini adalah sumber status utama. `CONTEXT.md` dan tabel status lama lainnya bersifat historis. Alasan di balik keputusan, hasil pengukuran, dan jebakan yang sudah ditemui dicatat di `docs/HANDOFF.md`.
 
@@ -331,6 +331,22 @@ Kriteria selesai:
 - Jumlah record sebelum dan sesudah migrasi tetap sesuai.
 - Deployment dapat dibatalkan tanpa menghapus data operasional.
 
+### P1-08 — Perilaku Saat Waktu Evakuasi Habis
+
+**Status:** Belum. `startCountdown()` berhenti di `00:00` lalu perulangannya putus; tidak ada pesan maupun perubahan arahan. Pada titik itu arahan "terus berjalan ke TES 9 km" menjadi keliru, dan yang dibutuhkan adalah arahan evakuasi vertikal. Kalimatnya menyangkut keselamatan, jadi harus divalidasi BPBD lebih dulu (Q-03).
+
+### P1-09 — Layar Saat Aplikasi Dibuka dari Luar Zona Rendaman
+
+**Status:** Belum. Aplikasi tetap menghitung rute dan menyalakan hitung mundur walaupun pengguna berada di luar zona rendaman, sehingga memunculkan keadaan darurat palsu. Kedatangan di luar zona baru terdeteksi bila terjadi di tengah rute (`confirmOutsideZoneArrival`). Perhatikan aturan kata: tetap "di luar zona rendaman", bukan "aman".
+
+### P1-10 — Pemberitahuan Bila Pengguna Mengikuti Rute Lama
+
+**Status:** Belum. Setelah berpindah ke alternatif tujuan, nama tujuan lama sudah tetap terlihat pada pil "Rute sebelumnya", tetapi aplikasi belum menawarkan kembali ke tujuan itu ketika pengguna ternyata berjalan mengikuti rutenya.
+
+### P1-11 — Pengalihan Rute Saat Keluar Jalur
+
+**Status:** Selesai di `main` (commit `6a727dc`), belum diuji di lapangan. `OffRouteTracker` mengganti rute setelah tiga pembaruan posisi berturut-turut menunjukkan jarak lebih dari 150 m dari garis rute, dengan ketelitian GPS maksimal 50 m. Pengujian lapangan menuntut berjalan lebih dari 150 m dari rute.
+
 ## Prioritas 2 — Fitur Lanjutan
 
 ### P2-01 — Rencana Evakuasi Keluarga
@@ -421,7 +437,9 @@ Kriteria selesai:
 
 ### Q-06 — Verifikasi Perangkat untuk Desain V3
 
-**Status:** Belum diuji di perangkat. Kode lulus kompilasi dan 113 uji unit, tetapi tampilan belum pernah dilihat di layar nyata. Penundaan ini disengaja atas permintaan Mikail, bukan kelalaian.
+**Status:** Selesai 20 September 2026 — seluruh perapian V3 sudah dilihat di Infinix X6855, termasuk lembar "Ada kendala?", pil peta, tombol perbesar/perkecil, gelembung tombol pusatkan, lencana TES/TEA, dan kartu gempa berjenjang. Yang tersisa dari daftar di bawah: tombol Bagikan dan Hapus pada rencana keluarga, serta pengujian pada font sistem besar.
+
+**Status awal:** Belum diuji di perangkat. Kode lulus kompilasi dan 113 uji unit, tetapi tampilan belum pernah dilihat di layar nyata. Penundaan ini disengaja atas permintaan Mikail, bukan kelalaian.
 
 Pekerjaan:
 
