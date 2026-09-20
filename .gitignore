@@ -42,3 +42,6 @@ android/app/build-verify/
 # Catatan crash JVM dari Gradle
 hs_err_pid*.log
 replay_pid*.log
+
+# Sesi kompiler Kotlin
+.kotlin/

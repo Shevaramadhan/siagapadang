@@ -67,6 +67,16 @@ class EvacuationRepositoryTest {
 
         override suspend fun findFacilityKind(name: String): String? = null
 
+        // Rute TEA belum dipakai pada uji ini; cukup dijawab kosong.
+        override suspend fun findTeaRoute(originNodeId: Long): com.akusukaproject.siagapadang.data.local.TeaRouteRow? = null
+
+        override suspend fun findTeaById(teaId: String): com.akusukaproject.siagapadang.data.local.TeaRow? = null
+
+        override suspend fun findTeaPathSteps(
+            teaId: String,
+            originNodeId: Long,
+        ): List<com.akusukaproject.siagapadang.data.local.TeaPathStep> = emptyList()
+
         override suspend fun findTesByName(name: String): TesRow? = when (name) {
             "TES Masjid Raya" -> TesRow(
                 tesId = "TES_01",
