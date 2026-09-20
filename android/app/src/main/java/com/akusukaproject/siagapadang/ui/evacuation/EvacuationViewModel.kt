@@ -57,8 +57,10 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
     private var routeJob: Job? = null
     private var countdownJob: Job? = null
     private var zoneStatusJob: Job? = null
+    private var initialZoneJob: Job? = null
     private var offlineRoadOverlayJob: Job? = null
     private var initialRouteRequested = false
+    private var initialLocationResolved = false
     private var minimumRouteIndex = 0
     private var minimumRouteSegmentFraction = 0.0
     private var announcedManeuverIndex: Int? = null
@@ -68,7 +70,6 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
     private var confirmedZoneKey: String? = null
     private var pendingZoneKey: String? = null
     private var pendingZoneConfirmationCount = 0
-    private val countdownStartedAtElapsedMillis = SystemClock.elapsedRealtime()
     private val rejectedDestinationNames = mutableSetOf<String>()
     private val offRouteTracker = OffRouteTracker()
     private var rerouteJob: Job? = null
@@ -79,7 +80,6 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
         loadTsunamiZoneOverlay()
         loadLocalDatasetManifest()
         monitorNetworkStatus()
-        startCountdown()
     }
 
     fun onMapViewportChanged(center: GeoCoordinate) {
@@ -160,6 +160,7 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun retryRoute() {
+        if (mutableUiState.value.isOutsideInundationZoneAtStart) return
         initialRouteRequested = false
         mutableUiState.value.currentLocation?.let(::requestInitialRoute)
     }
@@ -754,6 +755,13 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
                             updatedState
                         }
                         if (arrivalConfirmedNow) onArrivalConfirmed()
+                        if (mutableUiState.value.isOutsideInundationZoneAtStart) {
+                            return@collect
+                        }
+                        if (!initialLocationResolved) {
+                            inspectInitialZone(deviceLocation)
+                            return@collect
+                        }
                         if (!arrivalConfirmedNow) maybeVibrateUpcomingManeuver()
                         requestInitialRoute(deviceLocation.coordinate)
                         maybeRecalculateRouteForNewPosition(deviceLocation)
@@ -787,8 +795,35 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    private fun inspectInitialZone(deviceLocation: DeviceLocation) {
+        if (initialZoneJob?.isActive == true || initialLocationResolved) return
+        initialZoneJob = viewModelScope.launch {
+            mutableUiState.update {
+                it.copy(
+                    isCheckingInitialZone = true,
+                    initialZoneCheckMessage = null,
+                )
+            }
+            val result = runCatching { zoneRepository.findStatus(deviceLocation.coordinate) }
+            val status = result.getOrNull()
+            if (status != null) {
+                applyZoneStatus(status, deviceLocation.accuracyMeters)
+            } else {
+                Log.w(LOG_TAG, "Status zona awal tidak dapat diperiksa", result.exceptionOrNull())
+            }
+            if (mutableUiState.value.isOutsideInundationZoneAtStart) return@launch
+
+            // Jika data zona atau akurasi GPS belum cukup, arahan evakuasi tetap disiapkan.
+            // Pembaruan lokasi berikutnya akan terus memeriksa zona dan dapat menghentikan
+            // navigasi bila posisi luar zona kemudian terkonfirmasi dengan akurat.
+            initialLocationResolved = true
+            mutableUiState.update { it.copy(isCheckingInitialZone = false) }
+            requestInitialRoute(mutableUiState.value.currentLocation ?: deviceLocation.coordinate)
+        }
+    }
+
     private fun requestInitialRoute(location: GeoCoordinate) {
-        if (initialRouteRequested) return
+        if (initialRouteRequested || mutableUiState.value.isOutsideInundationZoneAtStart) return
         initialRouteRequested = true
         routeJob = viewModelScope.launch {
             val startedAt = System.currentTimeMillis()
@@ -860,7 +895,8 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
         val exitConfirmed = zoneExitTracker.update(status, accuracyMeters)
-        if (accuracyMeters == null || accuracyMeters > MAX_ZONE_ACCURACY_METERS) {
+        val initialDecision = decideInitialZone(status, accuracyMeters, MAX_ZONE_ACCURACY_METERS)
+        if (initialDecision == InitialZoneDecision.UNCONFIRMED) {
             pendingZoneKey = null
             pendingZoneConfirmationCount = 0
             return
@@ -868,6 +904,10 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
         val candidateKey = status.zoneCategoryKey()
         if (confirmedZoneKey == null) {
             confirmZoneStatus(status, candidateKey, isInitial = true)
+            if (initialDecision == InitialZoneDecision.OUTSIDE_RECORDED_ZONE) {
+                enterInitialOutsideZone()
+                return
+            }
             if (exitConfirmed) confirmOutsideZoneArrival()
             return
         }
@@ -887,6 +927,101 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
             confirmZoneStatus(status, candidateKey, isInitial = false)
         }
         if (exitConfirmed) confirmOutsideZoneArrival()
+    }
+
+    private fun enterInitialOutsideZone() {
+        routeJob?.cancel()
+        rerouteJob?.cancel()
+        countdownJob?.cancel()
+        routeJob = null
+        rerouteJob = null
+        countdownJob = null
+        initialRouteRequested = true
+        initialLocationResolved = true
+        arrivalTracker.reset()
+        offRouteTracker.reset()
+        resetRouteProgress()
+        rejectedDestinationNames.clear()
+        mutableUiState.update { state ->
+            state.copy(
+                isCheckingInitialZone = false,
+                isOutsideInundationZoneAtStart = true,
+                initialZoneCheckMessage = null,
+                route = null,
+                previousRoutes = emptyList(),
+                guidance = null,
+                directOrientation = null,
+                isLoadingRoute = false,
+                hasArrived = false,
+                arrivalReason = null,
+                arrivalDistanceMeters = null,
+                activeEdgeId = null,
+                remainingEvacuationSeconds = EvacuationUiState.EVACUATION_WINDOW_SECONDS,
+                errorMessage = null,
+            )
+        }
+    }
+
+    fun recheckInitialZone() {
+        val location = mutableUiState.value.currentLocation
+        val accuracyMeters = mutableUiState.value.locationAccuracyMeters
+        if (location == null || initialZoneJob?.isActive == true) return
+        initialZoneJob = viewModelScope.launch {
+            mutableUiState.update {
+                it.copy(isCheckingInitialZone = true, initialZoneCheckMessage = null)
+            }
+            runCatching { zoneRepository.findStatus(location) }
+                .onSuccess { status ->
+                    when (decideInitialZone(status, accuracyMeters, MAX_ZONE_ACCURACY_METERS)) {
+                        InitialZoneDecision.OUTSIDE_RECORDED_ZONE -> {
+                            confirmZoneStatus(status, status.zoneCategoryKey(), isInitial = true)
+                            mutableUiState.update {
+                                it.copy(
+                                    isCheckingInitialZone = false,
+                                    initialZoneCheckMessage =
+                                        "Posisi masih berada di luar zona rendaman.",
+                                )
+                            }
+                        }
+                        InitialZoneDecision.INSIDE_RECORDED_ZONE -> {
+                            zoneExitTracker.reset()
+                            zoneExitTracker.update(status, accuracyMeters)
+                            confirmZoneStatus(status, status.zoneCategoryKey(), isInitial = true)
+                            initialRouteRequested = false
+                            initialLocationResolved = true
+                            mutableUiState.update {
+                                it.copy(
+                                    isCheckingInitialZone = false,
+                                    isOutsideInundationZoneAtStart = false,
+                                    initialZoneCheckMessage = null,
+                                    remainingEvacuationSeconds =
+                                        EvacuationUiState.EVACUATION_WINDOW_SECONDS,
+                                )
+                            }
+                            requestInitialRoute(location)
+                        }
+                        InitialZoneDecision.UNCONFIRMED -> {
+                            mutableUiState.update {
+                                it.copy(
+                                    isCheckingInitialZone = false,
+                                    initialZoneCheckMessage =
+                                        "Akurasi GPS belum cukup untuk memastikan posisi. Coba lagi di tempat terbuka.",
+                                )
+                            }
+                        }
+                    }
+                }
+                .onFailure { error ->
+                    Log.w(LOG_TAG, "Status zona awal tidak dapat diperiksa ulang", error)
+                    mutableUiState.update {
+                        it.copy(
+                            isCheckingInitialZone = false,
+                            initialZoneCheckMessage =
+                                "Status zona belum dapat diperiksa. Data lokal tetap digunakan.",
+                        )
+                    }
+                }
+        }
     }
 
     private fun confirmOutsideZoneArrival() {
@@ -946,11 +1081,15 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun startCountdown() {
-        if (countdownJob != null) return
+        val state = mutableUiState.value
+        if (countdownJob?.isActive == true || state.hasArrived ||
+            state.isOutsideInundationZoneAtStart
+        ) return
+        val startedAt = SystemClock.elapsedRealtime()
         countdownJob = viewModelScope.launch {
             while (isActive && !mutableUiState.value.hasArrived) {
                 val elapsedSeconds = (
-                    (SystemClock.elapsedRealtime() - countdownStartedAtElapsedMillis) / 1_000L
+                    (SystemClock.elapsedRealtime() - startedAt) / 1_000L
                     ).toInt()
                 val remainingSeconds = (
                     EvacuationUiState.EVACUATION_WINDOW_SECONDS - elapsedSeconds

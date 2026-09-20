@@ -411,10 +411,11 @@ internal fun RollingDuration(text: String, fontSize: Int, modifier: Modifier = M
     }
 }
 
-/** Nada kartu waktu: putih bila waktu cukup, kuning bila mepet, merah bata bila tidak cukup. */
-internal enum class TimeTone { ENOUGH, TIGHT, NOT_ENOUGH }
+/** Nada kartu waktu, termasuk keadaan akhir ketika jendela evakuasi sudah habis. */
+internal enum class TimeTone { ENOUGH, TIGHT, NOT_ENOUGH, EXPIRED }
 
 internal fun timeTone(remainingSeconds: Int, walkingSeconds: Int): TimeTone = when {
+    remainingSeconds <= 0 -> TimeTone.EXPIRED
     remainingSeconds < walkingSeconds -> TimeTone.NOT_ENOUGH
     remainingSeconds < walkingSeconds * TIGHT_TIME_FACTOR -> TimeTone.TIGHT
     else -> TimeTone.ENOUGH
@@ -434,13 +435,13 @@ internal fun TimeCardV3(
     val background = when (tone) {
         TimeTone.ENOUGH -> Color.White
         TimeTone.TIGHT -> SiagaWarning
-        TimeTone.NOT_ENOUGH -> SiagaRustDeep
+        TimeTone.NOT_ENOUGH, TimeTone.EXPIRED -> SiagaRustDeep
     }
-    val primary = if (tone == TimeTone.NOT_ENOUGH) Color.White else SiagaNavy
+    val primary = if (tone == TimeTone.NOT_ENOUGH || tone == TimeTone.EXPIRED) Color.White else SiagaNavy
     val secondary = when (tone) {
         TimeTone.ENOUGH -> SiagaTextSecondary
         TimeTone.TIGHT -> SiagaNavy
-        TimeTone.NOT_ENOUGH -> Color.White
+        TimeTone.NOT_ENOUGH, TimeTone.EXPIRED -> Color.White
     }
     val walkingMinutes = ((walkingSeconds + 59) / 60).coerceAtLeast(1)
     Surface(
@@ -499,6 +500,7 @@ internal fun TimeCardV3(
                     text = when {
                         compassMessage != null -> compassMessage
                         tone == TimeTone.NOT_ENOUGH -> "Waktu tempuh melebihi sisa waktu. Tetap berjalan cepat, jangan berhenti."
+                        tone == TimeTone.EXPIRED -> "Jendela waktu evakuasi telah habis."
                         else -> "Sisa waktu dihitung sejak aplikasi dibuka"
                     },
                     fontSize = 12.sp,
@@ -507,6 +509,113 @@ internal fun TimeCardV3(
                 )
             }
         }
+    }
+}
+
+@Composable
+internal fun ExpiredEvacuationCardV3(modifier: Modifier = Modifier) {
+    Surface(
+        color = SiagaRustDeep,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(28.dp),
+        shadowElevation = 8.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription =
+                    "Waktu evakuasi habis. Lakukan evakuasi vertikal sekarang."
+            },
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = Color.White,
+                    contentColor = SiagaRustDeep,
+                    shape = CircleShape,
+                    modifier = Modifier.size(52.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_ms_warning),
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "WAKTU EVAKUASI HABIS",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                    )
+                    Text(
+                        text = "Lakukan evakuasi vertikal sekarang",
+                        fontSize = 24.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+            }
+            Text(
+                text = "TES/TEA belum tercapai. Hentikan perjalanan jauh dan cari tempat evakuasi vertikal di sekitar Anda.",
+                fontSize = 15.sp,
+                lineHeight = 21.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Surface(
+                color = Color.White,
+                contentColor = SiagaNavy,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    ExpiredGuidanceRow(
+                        number = "1",
+                        text = "Cari bangunan evakuasi bertingkat terdekat. Jika tidak ada, pilih bangunan beton bertulang yang tidak tampak rusak.",
+                    )
+                    ExpiredGuidanceRow(
+                        number = "2",
+                        text = "Gunakan tangga, jangan lift. Naik ke lantai paling atas, sedikitnya lantai 3.",
+                    )
+                    ExpiredGuidanceRow(
+                        number = "3",
+                        text = "Jauhi pantai dan sungai. Ikuti petugas atau rambu evakuasi.",
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpiredGuidanceRow(number: String, text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Surface(
+            color = SiagaWarning,
+            contentColor = SiagaNavy,
+            shape = CircleShape,
+            modifier = Modifier.size(28.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(number, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            lineHeight = 19.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -567,12 +676,14 @@ internal fun ObstacleButton(
     hasArrived: Boolean,
     arrivalReason: EvacuationArrivalReason?,
     isDirectOrientationActive: Boolean,
+    isEvacuationWindowExpired: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val title = when {
         hasArrived && arrivalReason == EvacuationArrivalReason.OUTSIDE_INUNDATION_ZONE -> "Di luar zona rendaman"
         hasArrived -> "Anda sudah sampai di TES"
+        isEvacuationWindowExpired -> "Evakuasi vertikal sekarang"
         isDirectOrientationActive -> "Orientasi terakhir aktif"
         isLoading -> "Mencari jalan lain…"
         else -> "Ada kendala?"
@@ -581,10 +692,11 @@ internal fun ObstacleButton(
     Surface(
         color = when {
             hasArrived -> Color(0xFF58D68D)
+            isEvacuationWindowExpired -> SiagaRustDeep
             active -> SiagaWarning
             else -> Color(0xFFE1E3C0)
         },
-        contentColor = SiagaNavy,
+        contentColor = if (isEvacuationWindowExpired) Color.White else SiagaNavy,
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(2.dp, SiagaNavy),
         shadowElevation = 6.dp,
@@ -605,7 +717,13 @@ internal fun ObstacleButton(
             if (isLoading) {
                 CircularProgressIndicator(color = SiagaNavy, strokeWidth = 2.5.dp, modifier = Modifier.size(24.dp))
             } else {
-                Icon(painterResource(R.drawable.ic_ms_report), contentDescription = null, modifier = Modifier.size(28.dp))
+                Icon(
+                    painterResource(
+                        if (isEvacuationWindowExpired) R.drawable.ic_ms_warning else R.drawable.ic_ms_report,
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column {

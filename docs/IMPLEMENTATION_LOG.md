@@ -96,3 +96,54 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
   koordinat terakhir geometri rute.
 - **Validasi ditunda atas arahan pengguna:** alur penolakan tiga rute pada perangkat, perubahan arah
   terhadap kompas/GPS nyata, dan pemeriksaan visual pada berbagai ukuran layar.
+
+## 20 September 2026 — P1-08 Perilaku Saat Waktu Evakuasi Habis
+
+- Branch: `feat/p1-countdown-expired`
+- Menambahkan keadaan `hasEvacuationWindowExpired` ketika waktu mencapai nol dan pengguna belum tiba.
+- Kartu arah dan waktu diganti dengan satu kartu tindakan yang memprioritaskan evakuasi vertikal.
+- Garis rute, jalur pendekatan, penanda tujuan, ETA, arahan belokan, riwayat rute, dan pilihan kendala
+  dinonaktifkan setelah waktu habis agar aplikasi tidak tetap menyuruh pengguna menuju TES/TEA jauh.
+- Mode peta besar menampilkan header khusus “Waktu evakuasi habis” tanpa panduan rute lama.
+- Arahan menyebut bangunan evakuasi bertingkat atau bangunan beton bertulang yang tidak tampak rusak,
+  penggunaan tangga dan bukan lift, lantai paling atas (sedikitnya lantai 3), menjauhi pantai dan
+  sungai, serta mengikuti petugas atau rambu evakuasi.
+- Redaksi diperiksa terhadap panduan BMKG dan Pedoman Sosialisasi Penanggulangan Bencana BNPB 2024.
+  Validasi terminologi dan arahan lokal dengan BPBD Kota Padang tetap masuk Q-03.
+- Unit test `:android:app:testDebugUnitTest` lulus, termasuk keadaan waktu nol dan pengecualian ketika
+  pengguna sudah tiba.
+- Pemeriksaan visual dengan durasi uji sementara 8 detik lulus pada Infinix X6855 (Android 16):
+  kartu ringkas dan header peta besar beralih ke arahan evakuasi vertikal tanpa crash.
+- Durasi produksi dikembalikan ke 20 menit setelah pengujian. Pengujian transisi nyata selama
+  20 menit serta validasi redaksi oleh BPBD Kota Padang masih diperlukan.
+
+## 20 September 2026 — Status Zona Tidak Menutupi Penanda Pengguna
+
+- Pada peta ringkas, status zona memakai pil pendek di sisi kiri agar tidak mencapai penanda lokasi
+  pengguna yang berada di tengah peta.
+- Pil ringkas menampilkan status inti dan membuka peta besar ketika diketuk; peta besar tetap
+  menampilkan status lengkap beserta legenda warna zona.
+- Banner transisi zona yang panjang hanya ditampilkan pada peta besar. Peta ringkas memakai pil
+  status tetap sehingga informasi tidak hilang dan panah pengguna tidak tertutup.
+- Build debug berhasil dipasang dan kedua mode diperiksa pada Infinix X6855 tanpa crash.
+## 20 September 2026 — P1-09 Posisi Awal di Luar Zona Rendaman
+
+- Branch: `feat/p1-outside-zone-start`; belum di-push atas arahan pengguna sambil menunggu perbaikan
+  dari Sheva.
+- Pemeriksaan zona lokal sekarang dilakukan setelah lokasi pertama diterima dan sebelum permintaan
+  rute maupun hitung mundur dimulai.
+- Posisi di luar zona hanya diterima bila akurasi GPS maksimal 35 meter. Aplikasi lalu menampilkan
+  layar khusus tanpa rute, ETA, hitung mundur, atau tombol pelaporan kendala.
+- Layar tetap menampilkan peta dan posisi pengguna, arahan untuk menjauhi pantai dan sungai, serta
+  tombol **Periksa posisi lagi**. Hasil pemeriksaan ulang ditampilkan langsung pada kartu.
+- Jika GPS belum akurat atau data zona tidak tersedia, aplikasi tetap menyiapkan arahan evakuasi
+  sebagai fallback dan terus memeriksa zona pada pembaruan lokasi berikutnya.
+- Hitung mundur sekarang dimulai ketika rute berhasil disiapkan, bukan ketika `ViewModel` dibuat.
+  Jika pemeriksaan ulang menyatakan pengguna masuk zona rendaman, rute baru dan hitung mundur penuh
+  20 menit dimulai.
+- Unit test `:android:app:testDebugUnitTest`: 130 lulus, 0 gagal. Empat tes baru mencakup posisi awal
+  di luar/dalam zona, GPS lemah, dan data zona tidak tersedia.
+- Pemeriksaan perangkat lulus pada Infinix X6855 (Android 16): layar khusus muncul saat aplikasi
+  dibuka di luar zona, tidak ada hitung mundur atau tombol **Ada kendala?**, pemeriksaan ulang
+  menampilkan “Posisi masih berada di luar zona rendaman.”, dan mode peta besar tetap bersih dari
+  kontrol rute.

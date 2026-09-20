@@ -5,6 +5,11 @@ import org.junit.Test
 
 class TimeToneTest {
     @Test
+    fun `zero seconds uses expired state`() {
+        assertEquals(TimeTone.EXPIRED, timeTone(remainingSeconds = 0, walkingSeconds = 600))
+    }
+
+    @Test
     fun `enough time stays neutral`() {
         assertEquals(TimeTone.ENOUGH, timeTone(remainingSeconds = 1_200, walkingSeconds = 600))
     }

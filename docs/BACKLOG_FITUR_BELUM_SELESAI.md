@@ -333,11 +333,26 @@ Kriteria selesai:
 
 ### P1-08 — Perilaku Saat Waktu Evakuasi Habis
 
-**Status:** Belum. `startCountdown()` berhenti di `00:00` lalu perulangannya putus; tidak ada pesan maupun perubahan arahan. Pada titik itu arahan "terus berjalan ke TES 9 km" menjadi keliru, dan yang dibutuhkan adalah arahan evakuasi vertikal. Kalimatnya menyangkut keselamatan, jadi harus divalidasi BPBD lebih dulu (Q-03).
+**Status:** Implementasi dan pemeriksaan visual pada Infinix X6855 selesai di branch `feat/p1-countdown-expired`; validasi redaksi oleh BPBD masih diperlukan.
+
+Ketika waktu mencapai `00:00` dan pengguna belum tiba, aplikasi masuk ke keadaan khusus evakuasi
+vertikal. Arahan belokan, ETA, jarak dan garis menuju TES/TEA disembunyikan agar tidak bertentangan
+dengan tindakan baru. Layar mengarahkan pengguna mencari bangunan evakuasi bertingkat, menggunakan
+tangga (bukan lift), naik ke lantai paling atas, menjauhi pantai dan sungai, serta mengikuti petugas
+atau rambu. Redaksi diselaraskan dengan panduan BMKG dan BNPB, tetapi tetap memerlukan validasi lokal
+BPBD Kota Padang melalui Q-03.
 
 ### P1-09 — Layar Saat Aplikasi Dibuka dari Luar Zona Rendaman
 
-**Status:** Belum. Aplikasi tetap menghitung rute dan menyalakan hitung mundur walaupun pengguna berada di luar zona rendaman, sehingga memunculkan keadaan darurat palsu. Kedatangan di luar zona baru terdeteksi bila terjadi di tengah rute (`confirmOutsideZoneArrival`). Perhatikan aturan kata: tetap "di luar zona rendaman", bukan "aman".
+**Status:** Implementasi dan pemeriksaan perangkat selesai di branch `feat/p1-outside-zone-start`; belum digabung atau di-push atas arahan pengguna.
+
+Lokasi pertama diperiksa memakai data zona lokal sebelum rute dan hitung mundur dimulai. Jika posisi
+di luar zona rendaman terkonfirmasi dengan akurasi GPS maksimal 35 meter, aplikasi menampilkan layar
+khusus, mempertahankan peta dan posisi pengguna, serta tidak menghitung rute atau menjalankan hitung
+mundur. Tombol **Periksa posisi lagi** memungkinkan pengguna memperbarui keputusan setelah berpindah.
+Jika data zona tidak tersedia atau GPS belum cukup akurat, aplikasi tetap menyiapkan arahan evakuasi
+dan melanjutkan pemeriksaan pada pembaruan lokasi berikutnya. Redaksi tetap memakai "di luar zona
+rendaman", bukan "aman".
 
 ### P1-10 — Pemberitahuan Bila Pengguna Mengikuti Rute Lama
 

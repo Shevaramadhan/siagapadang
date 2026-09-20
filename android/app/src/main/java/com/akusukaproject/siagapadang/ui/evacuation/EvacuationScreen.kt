@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.semantics.heading
+import androidx.compose.foundation.layout.heightIn
 import com.akusukaproject.siagapadang.ui.theme.SiagaTailGray
 import com.akusukaproject.siagapadang.ui.theme.SiagaRustDeep
 import androidx.compose.ui.input.pointer.pointerInput
@@ -108,7 +110,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akusukaproject.siagapadang.R
 import com.akusukaproject.siagapadang.data.model.BmkgStatus
-import com.akusukaproject.siagapadang.data.model.RegionalEarthquake
 import com.akusukaproject.siagapadang.data.model.EvacuationRoute
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
 import com.akusukaproject.siagapadang.data.model.InundationZoneStatus
@@ -183,6 +184,7 @@ fun EvacuationScreen(
         evidenceDestinationCapacity = evidenceDestinationCapacity,
         onRequestLocationPermission = ::requestLocationPermission,
         onRetryRoute = viewModel::retryRoute,
+        onRecheckInitialZone = viewModel::recheckInitialZone,
         onRefreshBmkgStatus = viewModel::refreshBmkgStatus,
         onCheckDataUpdates = viewModel::checkDataUpdates,
         onInstallDataUpdate = viewModel::installDataUpdate,
@@ -205,6 +207,7 @@ private fun EvacuationContent(
     evidenceDestinationCapacity: Int?,
     onRequestLocationPermission: () -> Unit,
     onRetryRoute: () -> Unit,
+    onRecheckInitialZone: () -> Unit,
     onRefreshBmkgStatus: () -> Unit,
     onCheckDataUpdates: () -> Unit,
     onInstallDataUpdate: () -> Unit,
@@ -283,6 +286,7 @@ private fun EvacuationContent(
                 selectedStatusDetail = null
                 showBlockedRouteDialog = true
             },
+            onRecheckInitialZone = onRecheckInitialZone,
             onMapViewportChanged = onMapViewportChanged,
             modifier = Modifier.align(Alignment.BottomCenter),
             onExpandMap = {
@@ -396,7 +400,21 @@ private fun EvacuationContent(
         }
 
         val route = state.route
-        if (route != null) {
+        if (state.isOutsideInundationZoneAtStart) {
+            OutsideZoneStartState(
+                state = state,
+                scale = scale,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = TOP_BAR_SPACE, start = 16.dp, end = 16.dp)
+                    .widthIn(max = 480.dp)
+                    .onSizeChanged { collapsedContentHeightPx = it.height }
+                    .graphicsLayer(
+                        alpha = collapsedContentAlpha,
+                        translationY = -expansionProgress * with(density) { scaled(45f).toPx() },
+                    ),
+            )
+        } else if (route != null) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -410,7 +428,9 @@ private fun EvacuationContent(
                         translationY = -expansionProgress * with(density) { scaled(45f).toPx() },
                     ),
             ) {
-                if (state.directOrientation != null) {
+                if (state.hasEvacuationWindowExpired) {
+                    ExpiredEvacuationCardV3()
+                } else if (state.directOrientation != null) {
                     DirectOrientationCard(
                         orientation = state.directOrientation,
                         deviceHeadingDegrees = state.deviceHeadingDegrees,
@@ -1174,15 +1194,6 @@ private fun BmkgDetailBody(
     )
     val isFarAway = distanceKm != null && distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Gempa nasional terbaru:",
-                color = SiagaTextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        // --- Gempa Nasional ---
         if (status.region.isNotBlank()) {
             Text(
                 text = status.region,
@@ -1218,7 +1229,6 @@ private fun BmkgDetailBody(
                 emphasised = false,
             )
         }
-        status.regionalEvent?.let { regional -> RegionalEarthquakeBlock(regional) }
         val timestamp = listOf(status.eventDate, status.eventTime).filter { it.isNotBlank() }.joinToString(" ")
         Text(
             text = listOfNotNull(
@@ -1231,71 +1241,6 @@ private fun BmkgDetailBody(
             lineHeight = 15.sp,
             fontWeight = FontWeight.Medium,
         )
-    }
-}
-
-/**
- * Gempa terdekat dari Padang menurut penyaringan peladen. Kejadiannya bisa jauh lebih lama
- * daripada gempa nasional terbaru, jadi waktunya selalu ikut ditulis.
- */
-@Composable
-private fun RegionalEarthquakeBlock(regional: RegionalEarthquake) {
-    Surface(
-        color = Color(0xFFFBE3D9),
-        contentColor = SiagaNavy,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painterResource(R.drawable.ic_ms_location_on),
-                    contentDescription = null,
-                    tint = SiagaRustDeep,
-                    modifier = Modifier.size(15.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Gempa terdekat dari Padang",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = SiagaRustDeep,
-                )
-            }
-            Text(
-                text = regional.region,
-                fontSize = 13.sp,
-                lineHeight = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = listOfNotNull(
-                    "M${regional.magnitude}".takeIf { regional.magnitude.isNotBlank() },
-                    regional.depth.takeIf { it.isNotBlank() },
-                    "±${regional.distanceKmFromPadang.toInt()} km dari Padang",
-                    listOf(regional.eventDate, regional.eventTime)
-                        .filter { it.isNotBlank() }
-                        .joinToString(" ")
-                        .takeIf { it.isNotBlank() },
-                ).joinToString(" · "),
-                color = SiagaTextSecondary,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            if (regional.potential.isNotBlank()) {
-                Text(
-                    text = regional.potential,
-                    color = SiagaTextSecondary,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-        }
     }
 }
 
@@ -1964,6 +1909,7 @@ private fun EvacuationMapPanel(
     scale: Float,
     expansionProgress: Float,
     onBlockedRouteClick: () -> Unit,
+    onRecheckInitialZone: () -> Unit,
     onMapViewportChanged: (GeoCoordinate) -> Unit,
     modifier: Modifier = Modifier,
     onExpandMap: () -> Unit = {},
@@ -1971,6 +1917,9 @@ private fun EvacuationMapPanel(
 ) {
     var followUserLocation by rememberSaveable { mutableStateOf(true) }
     var recenterRequest by rememberSaveable { mutableIntStateOf(0) }
+    // Tinggi tombol tindakan di bawah diukur agar tombol pusatkan berdiri di atasnya dengan
+    // jarak tetap, berapa pun banyak baris teks yang dipakai tombol itu.
+    var bottomActionHeightPx by remember { mutableIntStateOf(0) }
     var routeOverviewRequest by rememberSaveable { mutableIntStateOf(0) }
     var routeChangeNotice by remember { mutableStateOf<String?>(null) }
     var zoneStatusNotice by remember { mutableStateOf<String?>(null) }
@@ -2002,7 +1951,9 @@ private fun EvacuationMapPanel(
     ) {
         val isApproachingRoute = state.guidance?.isApproachingRoute == true
         val nearestRouteCoordinate = state.guidance?.nearestRouteCoordinate
-        val routeCoordinates = if (state.directOrientation == null) {
+        val routeCoordinates = if (
+            state.directOrientation == null && !state.hasEvacuationWindowExpired
+        ) {
             state.route?.coordinates.orEmpty()
         } else {
             emptyList()
@@ -2024,29 +1975,41 @@ private fun EvacuationMapPanel(
             tsunamiZoneOverlay = state.tsunamiZoneOverlay,
             routeCoordinates = remainingRouteCoordinates,
             approachRouteCoordinates = if (
-                state.directOrientation == null &&
+                state.directOrientation == null && !state.hasEvacuationWindowExpired &&
                 isApproachingRoute && state.currentLocation != null && nearestRouteCoordinate != null
             ) {
                 listOf(state.currentLocation, nearestRouteCoordinate)
             } else {
                 emptyList()
             },
-            approachTargetLocation = if (isApproachingRoute) nearestRouteCoordinate else null,
-            previousRouteCoordinates = if (state.directOrientation == null) {
+            approachTargetLocation = if (
+                isApproachingRoute && !state.hasEvacuationWindowExpired
+            ) nearestRouteCoordinate else null,
+            previousRouteCoordinates = if (
+                state.directOrientation == null && !state.hasEvacuationWindowExpired
+            ) {
                 state.previousRoutes.map { route -> route.coordinates }
             } else {
                 emptyList()
             },
             currentLocation = state.currentLocation,
-            destinationLocation = state.route?.destinationCoordinate,
-            destinationName = state.route?.destinationName,
-            destinationKindLabel = state.route?.destinationKind,
+            destinationLocation = state.route?.destinationCoordinate
+                ?.takeUnless { state.hasEvacuationWindowExpired },
+            destinationName = state.route?.destinationName
+                ?.takeUnless { state.hasEvacuationWindowExpired },
+            destinationKindLabel = state.route?.destinationKind
+                ?.takeUnless { state.hasEvacuationWindowExpired },
             destinationDurationLabel = (
-                state.directOrientation?.distanceMeters
+                state.directOrientation?.distanceMeters?.takeUnless { state.hasEvacuationWindowExpired }
                     ?: state.guidance?.remainingDistanceMeters
+                        ?.takeUnless { state.hasEvacuationWindowExpired }
                 )?.let { meters -> formatWalkingDuration(meters) },
-            destinationDistanceLabel = state.directOrientation?.distanceMeters?.let(::formatDistance)
-                ?: state.guidance?.remainingDistanceMeters?.let(::formatDistance),
+            destinationDistanceLabel = state.directOrientation?.distanceMeters
+                ?.takeUnless { state.hasEvacuationWindowExpired }
+                ?.let(::formatDistance)
+                ?: state.guidance?.remainingDistanceMeters
+                    ?.takeUnless { state.hasEvacuationWindowExpired }
+                    ?.let(::formatDistance),
             deviceHeadingDegrees = state.deviceHeadingDegrees,
             followUserLocation = followUserLocation,
             recenterRequest = recenterRequest,
@@ -2057,12 +2020,29 @@ private fun EvacuationMapPanel(
             onMapDoubleTap = if (expansionProgress < 0.5f) onExpandMap else null,
         )
 
-        // Satu susunan untuk kedua mode peta. Sebelumnya mode kecil memakai ikon bulat dan mode
-        // besar memakai pil, sehingga keterangan yang sama tampil dengan dua bentuk berbeda.
-        if (
-            state.tsunamiZoneOverlay != null ||
-            state.previousRoutes.isNotEmpty() ||
-            routeChangeNotice != null
+        if (state.tsunamiZoneOverlay != null) {
+            if (expansionProgress < 0.5f) {
+                CompactZoneStatusPill(
+                    status = state.currentZoneStatus,
+                    onClick = onExpandMap,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 8.dp)
+                        .zIndex(8f),
+                )
+            } else {
+                ZoneStatusPill(
+                    status = state.currentZoneStatus,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
+                        .zIndex(8f),
+                )
+            }
+        }
+
+        if (routeChangeNotice != null ||
+            (state.previousRoutes.isNotEmpty() && expansionProgress >= 0.5f)
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -2071,9 +2051,6 @@ private fun EvacuationMapPanel(
                     .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
                     .zIndex(8f),
             ) {
-                if (state.tsunamiZoneOverlay != null) {
-                    ZoneStatusPill(status = state.currentZoneStatus)
-                }
                 if (routeChangeNotice != null) {
                     RouteChangeNotice(message = routeChangeNotice.orEmpty(), scale = scale)
                 }
@@ -2085,7 +2062,21 @@ private fun EvacuationMapPanel(
             }
         }
 
-        state.route?.takeIf { state.directOrientation == null }?.let { route ->
+        if (state.isOutsideInundationZoneAtStart) {
+            ExpandedOutsideZoneHeader(
+                zoneCheckMessage = state.initialZoneCheckMessage,
+                modifier = Modifier.graphicsLayer(alpha = expansionProgress),
+            )
+        }
+
+        if (state.hasEvacuationWindowExpired) {
+            ExpiredMapHeader(
+                scale = scale,
+                modifier = Modifier
+                    .graphicsLayer(alpha = expansionProgress)
+                    .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onCollapseMap() }) },
+            )
+        } else state.route?.takeIf { state.directOrientation == null }?.let { route ->
             ExpandedMapHeader(
                 route = route,
                 guidance = state.guidance,
@@ -2118,7 +2109,7 @@ private fun EvacuationMapPanel(
                 .size(lerp((60f * scale).dp, (60f * scale).dp, expansionProgress)),
         )
 
-        zoneStatusNotice?.let { message ->
+        zoneStatusNotice?.takeIf { expansionProgress >= 0.5f }?.let { message ->
             ZoneStatusNotice(
                 message = message,
                 status = state.currentZoneStatus,
@@ -2145,22 +2136,44 @@ private fun EvacuationMapPanel(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 84.dp)
+                    .padding(
+                        end = 16.dp,
+                        bottom = if (bottomActionHeightPx > 0) {
+                            with(LocalDensity.current) { bottomActionHeightPx.toDp() } + 12.dp
+                        } else {
+                            96.dp
+                        },
+                    )
                     .zIndex(9f),
             )
         }
 
-        ObstacleButton(
-            enabled = state.canReportBlockedRoute,
-            isLoading = state.isLoadingRoute,
-            hasArrived = state.hasArrived,
-            arrivalReason = state.arrivalReason,
-            isDirectOrientationActive = state.directOrientation != null,
-            onClick = onBlockedRouteClick,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp),
-        )
+        if (state.isOutsideInundationZoneAtStart) {
+            RecheckPositionButton(
+                isChecking = state.isCheckingInitialZone,
+                onClick = onRecheckInitialZone,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp)
+                    .onSizeChanged { bottomActionHeightPx = it.height },
+            )
+        }
+
+        if (!state.isOutsideInundationZoneAtStart) {
+            ObstacleButton(
+                enabled = state.canReportBlockedRoute,
+                isLoading = state.isLoadingRoute,
+                hasArrived = state.hasArrived,
+                arrivalReason = state.arrivalReason,
+                isDirectOrientationActive = state.directOrientation != null,
+                isEvacuationWindowExpired = state.hasEvacuationWindowExpired,
+                onClick = onBlockedRouteClick,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp)
+                    .onSizeChanged { bottomActionHeightPx = it.height },
+            )
+        }
 
     }
 }
@@ -2321,6 +2334,75 @@ private fun ZoneStatusPill(
             }
         }
     }
+    }
+}
+
+/**
+ * Status ringkas untuk peta kecil. Lebarnya dibatasi agar tidak mencapai penanda lokasi yang
+ * dipusatkan pada peta; ketukan membuka peta besar dan legenda lengkap.
+ */
+@Composable
+private fun CompactZoneStatusPill(
+    status: InundationZoneStatus?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val appearance = zoneStatusAppearance(status)
+    val compactLabel = when (status) {
+        null, InundationZoneStatus.DataUnavailable -> "Status zona"
+        InundationZoneStatus.OutsideRecordedZone -> "Di luar zona"
+        is InundationZoneStatus.InsideRecordedZone -> when (status.dangerLevel.trim().lowercase()) {
+            "tinggi" -> "Bahaya tinggi"
+            "sedang" -> "Bahaya sedang"
+            "rendah" -> "Bahaya rendah"
+            else -> "Zona risiko"
+        }
+    }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .width(120.dp)
+            .height(48.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = "${appearance.label}. Perbesar peta untuk melihat keterangan zona"
+            },
+    ) {
+        Surface(
+            color = Color.White,
+            contentColor = SiagaNavy,
+            shape = RoundedCornerShape(16.dp),
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(appearance.dotColor),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = compactLabel,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(3.dp))
+                Icon(
+                    painterResource(R.drawable.ic_ms_expand_less),
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
     }
 }
 
@@ -2561,6 +2643,123 @@ private fun CompassDial(scale: Float) {
     }
 }
 
+/**
+ * Kartu ringkas di mode peta besar ketika posisi awal berada di luar zona rendaman. Isinya sama
+ * dengan kartu pada mode peta kecil, dipadatkan agar peta tetap lega — sama seperti perlakuan
+ * kartu arah pada mode evakuasi.
+ */
+@Composable
+private fun ExpandedOutsideZoneHeader(
+    zoneCheckMessage: String?,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = SiagaNavy,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(EXPANDED_HEADER_HEIGHT),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 44.dp, bottom = 16.dp),
+        ) {
+            Surface(
+                color = SiagaSafeGreen,
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(44.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painterResource(R.drawable.ic_ms_location_on),
+                        contentDescription = null,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Di luar zona rendaman",
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = zoneCheckMessage
+                        ?: "Navigasi dan hitung mundur tidak dimulai. Tetap menjauh dari pantai dan sungai.",
+                    color = SiagaOnNavyMuted,
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecheckPositionButton(
+    isChecking: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = Color.White,
+        contentColor = SiagaNavy,
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(2.dp, SiagaNavy),
+        shadowElevation = 8.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(role = Role.Button, enabled = !isChecking, onClick = onClick)
+            .semantics {
+                contentDescription = if (isChecking) {
+                    "Sedang memeriksa posisi"
+                } else {
+                    "Periksa posisi lagi"
+                }
+            },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+        ) {
+            if (isChecking) {
+                CircularProgressIndicator(color = SiagaNavy, strokeWidth = 2.5.dp, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Memeriksa…", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+            } else {
+                Icon(
+                    painterResource(R.drawable.ic_ms_my_location),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("Periksa posisi lagi", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        text = "Bila Anda sudah berpindah tempat",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = SiagaTextSecondary,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ExpandedMapHeader(
     route: EvacuationRoute,
@@ -2636,6 +2835,57 @@ private fun ExpandedMapHeader(
                     Text("SISA", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
                     Text(formatDuration(remainingSeconds), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.ExpiredMapHeader(
+    scale: Float,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = SiagaRustDeep,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(EXPANDED_HEADER_HEIGHT),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 18.dp, end = 86.dp, top = 14.dp, bottom = 34.dp),
+        ) {
+            Surface(
+                color = Color.White,
+                contentColor = SiagaRustDeep,
+                shape = CircleShape,
+                modifier = Modifier.size((66f * scale).dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_ms_warning),
+                        contentDescription = null,
+                        modifier = Modifier.size((38f * scale).dp),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column {
+                Text(
+                    text = "Waktu evakuasi habis",
+                    fontSize = 23.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    text = "Lakukan evakuasi vertikal. Gunakan tangga dan naik ke lantai paling atas.",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
@@ -2903,6 +3153,10 @@ private fun RoutePreparationState(
             title = "Mencari lokasi…"
             detail = "Pastikan GPS perangkat aktif. Arahan tetap disiapkan tanpa jaringan."
         }
+        state.isCheckingInitialZone -> {
+            title = "Memeriksa zona…"
+            detail = "Posisi awal diperiksa dari data zona yang tersimpan di perangkat."
+        }
         else -> {
             title = "Menyiapkan arahan…"
             detail = "Rute sedang dibaca dari data luring."
@@ -2922,7 +3176,9 @@ private fun RoutePreparationState(
             verticalArrangement = Arrangement.spacedBy((14f * scale).dp),
             modifier = Modifier.padding((24f * scale).dp),
         ) {
-            if (state.isLoadingRoute || state.currentLocation == null && state.hasLocationPermission) {
+            if (state.isLoadingRoute || state.isCheckingInitialZone ||
+                state.currentLocation == null && state.hasLocationPermission
+            ) {
                 CircularProgressIndicator(color = SiagaNavy)
             } else {
                 Image(
@@ -2950,6 +3206,79 @@ private fun RoutePreparationState(
                 state.errorMessage != null -> ActionButton(
                     text = "Coba lagi",
                     onClick = onRetryRoute,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutsideZoneStartState(
+    state: EvacuationUiState,
+    scale: Float,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = SiagaCream,
+        contentColor = SiagaNavy,
+        shape = RoundedCornerShape((22f * scale).dp),
+        shadowElevation = 8.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy((12f * scale).dp),
+            modifier = Modifier.padding((20f * scale).dp),
+        ) {
+            Surface(
+                color = SiagaSafeGreen,
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size((52f * scale).dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_ms_location_on),
+                        contentDescription = null,
+                        modifier = Modifier.size((30f * scale).dp),
+                    )
+                }
+            }
+            Text(
+                text = "Anda berada di luar zona rendaman",
+                fontSize = (22f * scale).sp,
+                lineHeight = (26f * scale).sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "Navigasi dan hitung mundur tidak dimulai karena posisi awal berada di luar zona rendaman yang tercatat.",
+                fontSize = (14f * scale).sp,
+                lineHeight = (19f * scale).sp,
+                textAlign = TextAlign.Center,
+            )
+            Surface(
+                color = Color.White,
+                contentColor = SiagaNavy,
+                shape = RoundedCornerShape((14f * scale).dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "Tetap menjauh dari pantai dan sungai. Ikuti petugas atau rambu evakuasi.",
+                    fontSize = (13f * scale).sp,
+                    lineHeight = (18f * scale).sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding((14f * scale).dp),
+                )
+            }
+            state.initialZoneCheckMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = SiagaTextSecondary,
+                    fontSize = (12f * scale).sp,
+                    lineHeight = (16f * scale).sp,
+                    textAlign = TextAlign.Center,
                 )
             }
         }

@@ -48,3 +48,6 @@ replay_pid*.log
 
 # Cache BMKG
 backend/cache/*.json
+
+# Keluaran sementara alat bantu pengujian
+.artifacts/
