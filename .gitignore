@@ -45,3 +45,6 @@ replay_pid*.log
 
 # Sesi kompiler Kotlin
 .kotlin/
+
+# Cache BMKG
+backend/cache/*.json
