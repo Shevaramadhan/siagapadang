@@ -9,6 +9,7 @@ import com.akusukaproject.siagapadang.SiagaPadangApplication
 import com.akusukaproject.siagapadang.data.model.Facility
 import com.akusukaproject.siagapadang.data.model.FacilityKind
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
+import com.akusukaproject.siagapadang.data.model.TsunamiZoneOverlay
 import com.akusukaproject.siagapadang.domain.NearestNodeFinder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,8 @@ data class FacilitiesUiState(
     val mode: FacilitiesMode = FacilitiesMode.LIST,
     val selectedId: String? = null,
     val userLocation: GeoCoordinate? = null,
+    val tsunamiZoneOverlay: TsunamiZoneOverlay? = null,
+    val zoneOverlayErrorMessage: String? = null,
     val meetingPointMessage: String? = null,
 ) {
     val visibleItems: List<FacilityItem>
@@ -55,6 +58,7 @@ class FacilitiesViewModel(application: Application) : AndroidViewModel(applicati
     val uiState: StateFlow<FacilitiesUiState> = mutableUiState.asStateFlow()
 
     init {
+        loadTsunamiZoneOverlay()
         viewModelScope.launch {
             val facilities = runCatching { app.evacuationRepository.loadFacilities() }.getOrElse {
                 mutableUiState.update {
@@ -79,6 +83,22 @@ class FacilitiesViewModel(application: Application) : AndroidViewModel(applicati
                 if (location == null) withDistance.sortedBy { it.facility.name } else withDistance.sortedBy { it.distanceMeters }
             }
             mutableUiState.update { it.copy(items = items, isLoading = false, userLocation = location) }
+        }
+    }
+
+    private fun loadTsunamiZoneOverlay() {
+        viewModelScope.launch {
+            runCatching { app.zoneRepository.loadMapOverlay() }
+                .onSuccess { overlay ->
+                    mutableUiState.update {
+                        it.copy(tsunamiZoneOverlay = overlay, zoneOverlayErrorMessage = null)
+                    }
+                }
+                .onFailure {
+                    mutableUiState.update {
+                        it.copy(zoneOverlayErrorMessage = "Batas zona belum dapat dibaca dari data lokal.")
+                    }
+                }
         }
     }
 

@@ -404,7 +404,6 @@ private fun EvacuationContent(
         if (state.isOutsideInundationZoneAtStart) {
             OutsideZoneStartState(
                 state = state,
-                onRecheck = onRecheckInitialZone,
                 scale = scale,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -3273,7 +3272,6 @@ private fun RoutePreparationState(
 @Composable
 private fun OutsideZoneStartState(
     state: EvacuationUiState,
-    onRecheck: () -> Unit,
     scale: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -3338,29 +3336,6 @@ private fun OutsideZoneStartState(
                     fontSize = (12f * scale).sp,
                     lineHeight = (16f * scale).sp,
                     textAlign = TextAlign.Center,
-                )
-            }
-            Button(
-                onClick = onRecheck,
-                enabled = !state.isCheckingInitialZone,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = SiagaNavy,
-                    contentColor = Color.White,
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) {
-                if (state.isCheckingInitialZone) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        strokeWidth = 2.5.dp,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                }
-                Text(
-                    text = if (state.isCheckingInitialZone) "Memeriksa…" else "Periksa posisi lagi",
-                    fontWeight = FontWeight.Bold,
                 )
             }
         }

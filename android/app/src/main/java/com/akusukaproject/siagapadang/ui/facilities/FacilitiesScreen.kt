@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +27,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -68,6 +71,10 @@ fun FacilitiesScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var followUser by rememberSaveable { mutableStateOf(true) }
+    var showLayerControls by rememberSaveable { mutableStateOf(false) }
+    var showTsunamiZones by rememberSaveable { mutableStateOf(true) }
+    var showTesMarkers by rememberSaveable { mutableStateOf(true) }
+    var showTeaMarkers by rememberSaveable { mutableStateOf(true) }
     BackHandler(onBack = onBack)
     LightStatusBarIcons()
 
@@ -162,33 +169,75 @@ fun FacilitiesScreen(
                 }
             }
             else -> Box(modifier = Modifier.weight(1f)) {
+                val mapFacilities = state.visibleItems
+                    .map { it.facility }
+                    .filter { facility ->
+                        when (facility.kind) {
+                            FacilityKind.TES -> showTesMarkers
+                            FacilityKind.TEA -> showTeaMarkers
+                        }
+                    }
+                val selectedMapItem = state.selected?.takeIf { item ->
+                    when (item.facility.kind) {
+                        FacilityKind.TES -> showTesMarkers
+                        FacilityKind.TEA -> showTeaMarkers
+                    }
+                }
+                val mapFocusCoordinates = selectedMapItem
+                    ?.let { listOfNotNull(state.userLocation, it.facility.coordinate) }
+                    ?: (listOfNotNull(state.userLocation) +
+                        mapFacilities.take(NEAREST_IN_OVERVIEW).map { it.coordinate })
                 OfflineMap(
                     offlineRoadOverlay = null,
                     isNetworkAvailable = null,
-                    tsunamiZoneOverlay = null,
+                    tsunamiZoneOverlay = state.tsunamiZoneOverlay.takeIf { showTsunamiZones },
                     routeCoordinates = emptyList(),
                     approachRouteCoordinates = emptyList(),
                     approachTargetLocation = null,
                     previousRouteCoordinates = emptyList(),
                     currentLocation = state.userLocation,
-                    destinationLocation = state.selected?.facility?.coordinate,
-                    destinationName = state.selected?.facility?.name,
-                    destinationDistanceLabel = state.selected?.distanceMeters?.let(::formatFacilityDistance),
+                    destinationLocation = selectedMapItem?.facility?.coordinate,
+                    destinationName = selectedMapItem?.facility?.name,
+                    destinationDistanceLabel = selectedMapItem?.distanceMeters?.let(::formatFacilityDistance),
                     deviceHeadingDegrees = null,
                     followUserLocation = false,
                     recenterRequest = 0,
                     routeOverviewRequest = 0,
                     onViewportChanged = {},
                     onUserMapGesture = { followUser = false },
-                    facilityMarkers = state.visibleItems.map { it.facility },
-                    selectedFacilityId = state.selectedId,
+                    facilityMarkers = mapFacilities,
+                    selectedFacilityId = selectedMapItem?.facility?.id,
                     onFacilityClick = viewModel::select,
-                    focusCoordinates = focusCoordinates(state),
-                    focusRequest = (state.selectedId to state.kindFilter).hashCode() or 1,
-                    focusBottomPaddingPx = if (state.selected != null) with(LocalDensity.current) { 230.dp.roundToPx() } else 0,
+                    focusCoordinates = mapFocusCoordinates,
+                    focusRequest = listOf(
+                        state.selectedId,
+                        state.kindFilter,
+                        showTesMarkers,
+                        showTeaMarkers,
+                    ).hashCode() or 1,
+                    focusBottomPaddingPx = if (selectedMapItem != null) {
+                        with(LocalDensity.current) { 230.dp.roundToPx() }
+                    } else {
+                        0
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
-                state.selected?.let { selected ->
+                MapLayerControls(
+                    expanded = showLayerControls,
+                    onExpandedChange = { showLayerControls = it },
+                    showTsunamiZones = showTsunamiZones,
+                    onShowTsunamiZonesChange = { showTsunamiZones = it },
+                    zoneOverlayAvailable = state.tsunamiZoneOverlay != null,
+                    zoneOverlayErrorMessage = state.zoneOverlayErrorMessage,
+                    showTesMarkers = showTesMarkers,
+                    onShowTesMarkersChange = { showTesMarkers = it },
+                    showTeaMarkers = showTeaMarkers,
+                    onShowTeaMarkersChange = { showTeaMarkers = it },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                )
+                selectedMapItem?.let { selected ->
                     SelectedFacilityCard(
                         item = selected,
                         message = state.meetingPointMessage,
@@ -198,6 +247,175 @@ fun FacilitiesScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MapLayerControls(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    showTsunamiZones: Boolean,
+    onShowTsunamiZonesChange: (Boolean) -> Unit,
+    zoneOverlayAvailable: Boolean,
+    zoneOverlayErrorMessage: String?,
+    showTesMarkers: Boolean,
+    onShowTesMarkersChange: (Boolean) -> Unit,
+    showTeaMarkers: Boolean,
+    onShowTeaMarkersChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier,
+    ) {
+        Surface(
+            color = Color.White,
+            contentColor = SiagaNavy,
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.dp, SiagaLine),
+            shadowElevation = 5.dp,
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .clickable(role = Role.Button) { onExpandedChange(!expanded) },
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_ms_layers),
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Lapisan", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    painterResource(if (expanded) R.drawable.ic_ms_expand_less else R.drawable.ic_ms_expand_more),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        if (expanded) {
+            Surface(
+                color = Color.White,
+                contentColor = SiagaNavy,
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, SiagaLine),
+                shadowElevation = 7.dp,
+                modifier = Modifier.widthIn(min = 250.dp, max = 290.dp),
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Text("Lapisan peta", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    LayerToggleRow(
+                        title = "Zona rendaman",
+                        detail = when {
+                            zoneOverlayAvailable -> "Batas tingkat bahaya"
+                            zoneOverlayErrorMessage != null -> "Data zona belum tersedia"
+                            else -> "Memuat data lokal…"
+                        },
+                        checked = showTsunamiZones && zoneOverlayAvailable,
+                        enabled = zoneOverlayAvailable,
+                        onCheckedChange = onShowTsunamiZonesChange,
+                    )
+                    if (showTsunamiZones && zoneOverlayAvailable) ZoneRiskLegend()
+                    LayerToggleRow(
+                        title = "Titik TES",
+                        detail = "Gedung evakuasi sementara",
+                        checked = showTesMarkers,
+                        onCheckedChange = onShowTesMarkersChange,
+                    )
+                    LayerToggleRow(
+                        title = "Titik TEA",
+                        detail = "Kawasan evakuasi akhir",
+                        checked = showTeaMarkers,
+                        onCheckedChange = onShowTeaMarkersChange,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LayerToggleRow(
+    title: String,
+    detail: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 58.dp)
+            .clickable(enabled = enabled, role = Role.Switch) { onCheckedChange(!checked) },
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (enabled) SiagaNavy else SiagaTextSecondary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(detail, color = SiagaTextSecondary, fontSize = 11.sp)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = SiagaNavy,
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = Color(0xFF9AA6B2),
+                uncheckedBorderColor = Color.Transparent,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun ZoneRiskLegend() {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    ) {
+        Text(
+            text = "Keterangan warna",
+            color = SiagaTextSecondary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        // Hijau mudah dikira "aman", padahal yang diketahui hanya bahwa petak itu berada di luar
+        // poligon rendaman yang tercatat. Labelnya ditulis utuh supaya tidak disalahartikan.
+        ZoneLegendDot("Di luar zona rendaman", Color(0xFF00A152))
+        ZoneLegendDot("Zona bahaya rendah", Color(0xFFE0B900))
+        ZoneLegendDot("Zona bahaya sedang", Color(0xFFE65C00))
+        ZoneLegendDot("Zona bahaya tinggi", Color(0xFFC62828))
+    }
+}
+
+@Composable
+private fun ZoneLegendDot(label: String, color: Color, modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
+        Box(
+            Modifier
+                .size(9.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(color),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(label, color = SiagaTextSecondary, fontSize = 11.sp, maxLines = 1)
     }
 }
 
@@ -329,11 +547,6 @@ private fun SelectedFacilityCard(
         }
     }
 }
-
-/** Tanpa pilihan: posisi pengguna dan tujuan terdekat. Dengan pilihan: pengguna dan tujuan itu. */
-private fun focusCoordinates(state: FacilitiesUiState) =
-    state.selected?.let { listOfNotNull(state.userLocation, it.facility.coordinate) }
-        ?: (listOfNotNull(state.userLocation) + state.visibleItems.take(NEAREST_IN_OVERVIEW).map { it.facility.coordinate })
 
 private const val NEAREST_IN_OVERVIEW = 6
 

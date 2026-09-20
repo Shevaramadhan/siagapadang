@@ -509,7 +509,7 @@ private fun updateMapOverlays(
     offlineRoadOverlay?.let { overlay ->
         updateOfflineRoadOverlay(style, overlay, isNetworkAvailable, offlineRoadOverlayTracker)
     }
-    tsunamiZoneOverlay?.let { overlay -> updateTsunamiZoneOverlays(style, overlay) }
+    updateTsunamiZoneOverlays(style, tsunamiZoneOverlay)
     updatePreviousRouteOverlays(style, previousRouteCoordinates)
 
     val existingRouteSource = style.getSource(ROUTE_SOURCE_ID) as? GeoJsonSource
@@ -733,8 +733,20 @@ private fun updateApproachTargetOverlay(
 
 private fun updateTsunamiZoneOverlays(
     style: Style,
-    overlay: TsunamiZoneOverlay,
+    overlay: TsunamiZoneOverlay?,
 ) {
+    if (overlay == null) {
+        listOf(
+            SAFE_ZONE_SOURCE_ID,
+            LOW_RISK_ZONE_SOURCE_ID,
+            MEDIUM_RISK_ZONE_SOURCE_ID,
+            HIGH_RISK_ZONE_SOURCE_ID,
+        ).forEach { sourceId ->
+            (style.getSource(sourceId) as? GeoJsonSource)
+                ?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+        }
+        return
+    }
     ensureZoneLayer(
         style = style,
         sourceId = SAFE_ZONE_SOURCE_ID,
@@ -797,7 +809,11 @@ private fun ensureZoneLayer(
     lineWidthDp: Float,
     lineDash: Array<Float>?,
 ) {
-    if (style.getSource(sourceId) != null) return
+    val existingSource = style.getSource(sourceId) as? GeoJsonSource
+    if (existingSource != null) {
+        existingSource.setGeoJson(geoJson)
+        return
+    }
 
     style.addSource(GeoJsonSource(sourceId, geoJson))
     val fillLayer = FillLayer(fillLayerId, sourceId).withProperties(
@@ -812,6 +828,7 @@ private fun ensureZoneLayer(
         lineJoin(Property.LINE_JOIN_ROUND),
     ).apply { lineDash?.let { setProperties(lineDasharray(it)) } }
     val navigationAnchor = listOf(
+        FACILITY_LAYER_ID,
         PREVIOUS_ROUTES_LAYER_ID,
         ROUTE_LAYER_ID,
         DESTINATION_LAYER_ID,
