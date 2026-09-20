@@ -137,7 +137,7 @@ interface EvacuationDao {
     suspend fun findTeaRoute(originNodeId: Long): TeaRouteRow?
 
     @SkipQueryVerification
-    @Query("SELECT tea_id, kapasitas, lat, lon FROM tb_tea WHERE tea_id = :teaId LIMIT 1")
+    @Query("SELECT tea_id, nama_tea, kapasitas, lat, lon FROM tb_tea WHERE tea_id = :teaId LIMIT 1")
     suspend fun findTeaById(teaId: String): TeaRow?
 
     @SkipQueryVerification

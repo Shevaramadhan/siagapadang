@@ -1175,6 +1175,65 @@ private fun BmkgDetailBody(
     val isFarAway = distanceKm != null && distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
+        // --- Gempa Regional (khusus Sumatera Barat) ---
+        status.regionalEvent?.let { regional ->
+            Surface(
+                color = Color(0xFFFFF3E0),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text(
+                        text = "\uD83D\uDCCD Gempa Terdekat dari Padang",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFFE65100),
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = regional.region,
+                        color = SiagaNavy,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 17.sp,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "M${regional.magnitude} \u00b7 ${regional.depth} \u00b7 ~${regional.distanceKmFromPadang.toInt()} km dari Padang",
+                        color = SiagaNavy.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    if (regional.potential.isNotBlank()) {
+                        Text(
+                            text = regional.potential,
+                            color = SiagaNavy.copy(alpha = 0.75f),
+                            fontSize = 11.sp,
+                        )
+                    }
+                    val regionalTimestamp = listOfNotNull(
+                        regional.eventDate.takeIf { it.isNotBlank() },
+                        regional.eventTime.takeIf { it.isNotBlank() },
+                        if (status.regionalDataStatus == "stale") "(Tersimpan)" else null
+                    ).joinToString(" ")
+                    
+                    if (regionalTimestamp.isNotBlank()) {
+                        Text(
+                            text = regionalTimestamp,
+                            color = SiagaTextSecondary,
+                            fontSize = 10.sp,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Gempa nasional terbaru:",
+                color = SiagaTextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
         // --- Gempa Nasional ---
         if (status.region.isNotBlank()) {
             Text(

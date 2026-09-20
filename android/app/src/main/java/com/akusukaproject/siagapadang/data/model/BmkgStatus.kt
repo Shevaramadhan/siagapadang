@@ -31,4 +31,5 @@ data class BmkgStatus(
     val epicenter: GeoCoordinate? = null,
     /** Gempa regional terdekat dari Padang (radius 1.500 km); null jika tidak ada. */
     val regionalEvent: RegionalEarthquake? = null,
+    val regionalDataStatus: String? = null,
 )

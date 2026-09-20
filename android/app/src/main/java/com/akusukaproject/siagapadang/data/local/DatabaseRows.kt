@@ -71,6 +71,7 @@ data class ZoneGeometryRow(
 
 data class TeaRow(
     @ColumnInfo(name = "tea_id") val teaId: String,
+    @ColumnInfo(name = "nama_tea") val namaTea: String?,
     val kapasitas: Double,
     val lat: Double,
     val lon: Double,

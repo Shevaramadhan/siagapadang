@@ -136,6 +136,7 @@ async def get_bmkg_status():
                 gempas = [gempas]
             
             regional_event = None
+            min_distance = RADIUS_KM + 1.0  # Mulai dengan batas atas
             for g in gempas:
                 coords = str(g.get("Coordinates") or "").split(",")
                 if len(coords) == 2:
@@ -143,7 +144,8 @@ async def get_bmkg_status():
                         lat = float(coords[0])
                         lon = float(coords[1])
                         distance = calculate_distance(PADANG_LAT, PADANG_LON, lat, lon)
-                        if distance <= RADIUS_KM:
+                        if distance <= RADIUS_KM and distance < min_distance:
+                            min_distance = distance
                             regional_event = BMKGRegionalEvent(
                                 tanggal=str(g.get("Tanggal") or ""),
                                 jam=str(g.get("Jam") or ""),
@@ -157,7 +159,6 @@ async def get_bmkg_status():
                                 potensi=str(g.get("Potensi") or ""),
                                 distance_km_from_padang=round(distance, 2)
                             )
-                            break
                     except ValueError:
                         continue
             

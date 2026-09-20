@@ -50,6 +50,7 @@ class BmkgApiClient(
         source = json.optString("source", "BMKG"),
         epicenter = parseEpicenter(json.optString("coordinates")),
         regionalEvent = parseRegionalEvent(json.optJSONObject("regional_event")),
+        regionalDataStatus = json.optString("regional_data_status").takeIf { it.isNotBlank() },
     )
 
     private fun parseRegionalEvent(json: JSONObject?): RegionalEarthquake? {

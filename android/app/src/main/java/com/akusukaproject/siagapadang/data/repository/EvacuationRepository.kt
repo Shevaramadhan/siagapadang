@@ -177,7 +177,7 @@ class EvacuationRepository(
         return EvacuationRoute(
             originNodeId = originNodeId,
             rank = rank,
-            destinationName = teaId,
+            destinationName = destination?.namaTea ?: teaId,
             estimatedSeconds = estimatedSeconds,
             coordinates = assembled.coordinates,
             destinationCoordinate = destination?.let { tea ->
@@ -186,6 +186,7 @@ class EvacuationRepository(
             destinationCapacityPeople = destination?.kapasitas?.roundToInt(),
             destinationZoneCode = "Perbukitan (TEA)",
             destinationExternalId = teaId,
+            destinationKind = "TEA",
             nodeIds = pathNodeIds,
             edgeIds = assembled.edgeIds,
             edgeCoordinateRanges = assembled.edgeCoordinateRanges,
