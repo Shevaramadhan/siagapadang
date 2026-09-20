@@ -64,6 +64,7 @@ data class EvacuationUiState(
     val occupancyStatus: OccupancyStatusResponseDto? = null,
     val isReportingOccupancy: Boolean = false,
     val occupancyReportMessage: String? = null,
+    val showCheckinConfirmationDialog: Boolean = false,
 ) {
     val isCheckingIn: Boolean
         get() = checkinStatus == CheckinStatus.CHECKING_IN

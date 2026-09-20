@@ -2,6 +2,7 @@ package com.akusukaproject.siagapadang.data.remote
 
 import com.akusukaproject.siagapadang.data.model.BmkgStatus
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
+import com.akusukaproject.siagapadang.data.model.RegionalEarthquake
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -48,7 +49,22 @@ class BmkgApiClient(
         fetchedAt = json.optString("fetched_at"),
         source = json.optString("source", "BMKG"),
         epicenter = parseEpicenter(json.optString("coordinates")),
+        regionalEvent = parseRegionalEvent(json.optJSONObject("regional_event")),
     )
+
+    private fun parseRegionalEvent(json: JSONObject?): RegionalEarthquake? {
+        json ?: return null
+        return RegionalEarthquake(
+            eventDate = json.optString("tanggal"),
+            eventTime = json.optString("jam"),
+            magnitude = json.optString("magnitude"),
+            depth = json.optString("kedalaman"),
+            region = json.optString("wilayah"),
+            potential = json.optString("potensi"),
+            distanceKmFromPadang = json.optDouble("distance_km_from_padang", 0.0),
+            epicenter = parseEpicenter(json.optString("coordinates")),
+        )
+    }
 
     /** BMKG mengirim "coordinates" sebagai "lintang,bujur", misalnya "-8.05,120.86". */
     private fun parseEpicenter(raw: String?): GeoCoordinate? {

@@ -171,6 +171,9 @@ class DatasetPackageInstaller(
             "tb_tes",
             "tb_inundation_zones",
             "tb_safe_zones",
+            "tb_tea",
+            "tb_tea_routes",
+            "tb_tea_next",
         )
         private val REQUIRED_COLUMNS = mapOf(
             "tb_nodes" to setOf("node_id", "lat", "lon", "is_safe"),
@@ -190,6 +193,9 @@ class DatasetPackageInstaller(
             "tb_tes" to setOf("tes_id", "nama_tes", "kapasitas", "lat", "lon"),
             "tb_inundation_zones" to setOf("zone_id", "geometry_wkt"),
             "tb_safe_zones" to setOf("safe_zone_id", "geometry_wkt"),
+            "tb_tea" to setOf("tea_id", "kapasitas", "lat", "lon"),
+            "tb_tea_routes" to setOf("origin_node_id", "nearest_tea_id", "alt_tea_id"),
+            "tb_tea_next" to setOf("tea_id", "node_id", "next_node_id"),
         )
 
         fun databaseNameFor(remote: RemoteDatasetVersion): String =

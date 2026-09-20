@@ -577,7 +577,18 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
         mutableUiState.update { it.copy(obstructionReportMessage = null) }
     }
 
+    /** Meminta konfirmasi sebelum mengirim check-in ke posko. */
+    fun requestCheckinConfirmation() {
+        mutableUiState.update { it.copy(showCheckinConfirmationDialog = true) }
+    }
+
+    /** Menutup dialog konfirmasi check-in tanpa mengirim data. */
+    fun dismissCheckinConfirmation() {
+        mutableUiState.update { it.copy(showCheckinConfirmationDialog = false) }
+    }
+
     fun performShelterCheckin() {
+        mutableUiState.update { it.copy(showCheckinConfirmationDialog = false) }
         val currentState = mutableUiState.value
         if (
             !currentState.hasArrived ||

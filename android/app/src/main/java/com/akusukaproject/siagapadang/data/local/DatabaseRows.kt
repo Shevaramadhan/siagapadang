@@ -68,3 +68,27 @@ data class ZoneGeometryRow(
     val level: String,
     @ColumnInfo(name = "geometry_wkt") val geometryWkt: String,
 )
+
+data class TeaRow(
+    @ColumnInfo(name = "tea_id") val teaId: String,
+    val kapasitas: Double,
+    val lat: Double,
+    val lon: Double,
+)
+
+data class TeaRouteRow(
+    @ColumnInfo(name = "origin_node_id") val originNodeId: Long,
+    @ColumnInfo(name = "nearest_tea_id") val nearestTeaId: String,
+    @ColumnInfo(name = "alt_tea_id") val altTeaId: String,
+)
+
+data class TeaNextRow(
+    @ColumnInfo(name = "tea_id") val teaId: String,
+    @ColumnInfo(name = "node_id") val nodeId: Long,
+    @ColumnInfo(name = "next_node_id") val nextNodeId: Long,
+)
+
+data class TeaPathStep(
+    val nodeId: Long,
+    val nextNodeId: Long,
+)

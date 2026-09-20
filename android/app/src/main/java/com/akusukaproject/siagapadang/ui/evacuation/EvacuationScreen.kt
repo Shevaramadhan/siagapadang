@@ -64,6 +64,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -186,7 +187,9 @@ fun EvacuationScreen(
         onInstallDataUpdate = viewModel::installDataUpdate,
         onReportObstacle = viewModel::reportEvacuationObstacle,
         onMapViewportChanged = viewModel::onMapViewportChanged,
-        onPerformCheckin = viewModel::performShelterCheckin,
+        onPerformCheckin = viewModel::requestCheckinConfirmation,
+        onConfirmCheckin = viewModel::performShelterCheckin,
+        onDismissCheckinConfirmation = viewModel::dismissCheckinConfirmation,
         onDismissObstructionMessage = viewModel::dismissObstructionMessage,
         onReportOccupancy = viewModel::reportShelterOccupancy,
         onOpenMenu = onOpenMenu,
@@ -207,6 +210,8 @@ private fun EvacuationContent(
     onReportObstacle: (EvacuationObstacleType) -> Unit,
     onMapViewportChanged: (GeoCoordinate) -> Unit,
     onPerformCheckin: () -> Unit,
+    onConfirmCheckin: () -> Unit = {},
+    onDismissCheckinConfirmation: () -> Unit = {},
     onDismissObstructionMessage: () -> Unit = {},
     onReportOccupancy: (String) -> Unit = {},
     onOpenMenu: () -> Unit = {},
@@ -482,6 +487,14 @@ private fun EvacuationContent(
                 showBlockedRouteDialog = false
                 onReportObstacle(type)
             },
+        )
+    }
+
+    if (state.showCheckinConfirmationDialog) {
+        CheckinConfirmationDialog(
+            destinationName = state.route?.destinationName ?: "TES",
+            onConfirm = onConfirmCheckin,
+            onDismiss = onDismissCheckinConfirmation,
         )
     }
 
@@ -1157,6 +1170,64 @@ private fun BmkgDetailBody(
     )
     val isFarAway = distanceKm != null && distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        // --- Gempa Regional (khusus Sumatera Barat) ---
+        status.regionalEvent?.let { regional ->
+            Surface(
+                color = Color(0xFFFFF3E0),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text(
+                        text = "\uD83D\uDCCD Gempa Terdekat dari Padang",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFFE65100),
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = regional.region,
+                        color = SiagaNavy,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 17.sp,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "M${regional.magnitude} \u00b7 ${regional.depth} \u00b7 ~${regional.distanceKmFromPadang.toInt()} km dari Padang",
+                        color = SiagaNavy.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    if (regional.potential.isNotBlank()) {
+                        Text(
+                            text = regional.potential,
+                            color = SiagaNavy.copy(alpha = 0.75f),
+                            fontSize = 11.sp,
+                        )
+                    }
+                    val regionalTimestamp = listOf(regional.eventDate, regional.eventTime)
+                        .filter { it.isNotBlank() }.joinToString(" ")
+                    if (regionalTimestamp.isNotBlank()) {
+                        Text(
+                            text = regionalTimestamp,
+                            color = SiagaTextSecondary,
+                            fontSize = 10.sp,
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Gempa nasional terbaru:",
+                color = SiagaTextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        // --- Gempa Nasional ---
         if (status.region.isNotBlank()) {
             Text(
                 text = status.region,
@@ -3027,6 +3098,64 @@ private fun FamilyMeetingPointReminder(meetingPointName: String) {
             )
         }
     }
+}
+
+@Composable
+private fun CheckinConfirmationDialog(
+    destinationName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_ms_where_to_vote),
+                contentDescription = null,
+                tint = SiagaNavy,
+                modifier = Modifier.size(36.dp),
+            )
+        },
+        title = {
+            Text(
+                text = "Lapor Tiba & Selamat?",
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+        },
+        text = {
+            Text(
+                text = "Data lokasi dan kehadiran Anda di \"$destinationName\" akan dikirimkan ke posko BPBD " +
+                    "agar tercatat selamat. Pastikan Anda sudah benar-benar berada di tempat evakuasi.",
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                textAlign = TextAlign.Center,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SiagaNavy,
+                    contentColor = SiagaCream,
+                ),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(text = "Ya, Lapor Selamat", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                border = BorderStroke(1.dp, SiagaNavy.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(text = "Batal", color = SiagaNavy)
+            }
+        },
+        shape = RoundedCornerShape(24.dp),
+        containerColor = Color.White,
+    )
 }
 
 @Composable

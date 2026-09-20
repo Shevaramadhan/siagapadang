@@ -103,7 +103,23 @@ class EvacuationRepository(
         rank: Int = 1,
     ): EvacuationRoute {
         val nearestNode = findNearestNode(location)
-        return loadRoute(originNodeId = nearestNode.nodeId, rank = rank)
+        val tesRoute = loadRoute(originNodeId = nearestNode.nodeId, rank = rank)
+        
+        val teaRouteRow = dao.findTeaRoute(nearestNode.nodeId)
+        if (teaRouteRow != null) {
+            val teaId = if (rank == 2) teaRouteRow.altTeaId else teaRouteRow.nearestTeaId
+            if (teaId.isNotBlank()) {
+                val teaRoute = runCatching { 
+                    loadTeaRoute(nearestNode.nodeId, teaId, isAlternative = (rank == 2)) 
+                }.getOrNull()
+                
+                if (teaRoute != null && teaRoute.estimatedSeconds <= tesRoute.estimatedSeconds) {
+                    return teaRoute
+                }
+            }
+        }
+        
+        return tesRoute
     }
 
     suspend fun loadRoute(originNodeId: Long, rank: Int): EvacuationRoute {
@@ -117,6 +133,63 @@ class EvacuationRepository(
             destinationName = selection.destinationName,
             estimatedSeconds = (selection.etaMinutes * 60.0).roundToInt(),
             pathNodeIds = parsePath(selection.path),
+        )
+    }
+
+    suspend fun loadTeaRoute(originNodeId: Long, teaId: String, isAlternative: Boolean = false): EvacuationRoute {
+        val steps = dao.findTeaPathSteps(teaId, originNodeId)
+        if (steps.isEmpty()) throw IllegalStateException("Rute ke TEA tidak tersedia untuk lokasi ini")
+        val pathNodeIds = steps.map { it.nodeId } + steps.last().nextNodeId
+        return buildTeaRoute(
+            originNodeId = originNodeId,
+            teaId = teaId,
+            pathNodeIds = pathNodeIds,
+            rank = if (isAlternative) 2 else 1,
+        )
+    }
+
+    private suspend fun buildTeaRoute(
+        originNodeId: Long,
+        teaId: String,
+        pathNodeIds: List<Long>,
+        rank: Int,
+    ): EvacuationRoute {
+        val distinctNodeIds = pathNodeIds.distinct()
+        val edges = dao.findEdgesForNodes(distinctNodeIds)
+        val nodeCoordinates = dao.findNodesByIds(distinctNodeIds).associate { node ->
+            node.nodeId to GeoCoordinate(latitude = node.lat, longitude = node.lon)
+        }
+        val assembled = withContext(Dispatchers.Default) {
+            PolylineAssembler.assembleWithEdges(pathNodeIds, edges, nodeCoordinates)
+        }
+        val destination = dao.findTeaById(teaId)
+        
+        // Calculate ETA manually by summing edge lengths in meters / speed
+        var totalLength = 0.0
+        val pathEdgeIds = assembled.edgeIds
+        for (edge in edges) {
+            if (edge.edgeId in pathEdgeIds) {
+                totalLength += edge.length
+            }
+        }
+        val estimatedSeconds = (totalLength / WALKING_SPEED_METERS_PER_SECOND).roundToInt()
+
+        return EvacuationRoute(
+            originNodeId = originNodeId,
+            rank = rank,
+            destinationName = teaId,
+            estimatedSeconds = estimatedSeconds,
+            coordinates = assembled.coordinates,
+            destinationCoordinate = destination?.let { tea ->
+                GeoCoordinate(latitude = tea.lat, longitude = tea.lon)
+            },
+            destinationCapacityPeople = destination?.kapasitas?.roundToInt(),
+            destinationZoneCode = "Perbukitan (TEA)",
+            destinationExternalId = teaId,
+            nodeIds = pathNodeIds,
+            edgeIds = assembled.edgeIds,
+            edgeCoordinateRanges = assembled.edgeCoordinateRanges,
+            datasetVersion = datasetVersion,
         )
     }
 

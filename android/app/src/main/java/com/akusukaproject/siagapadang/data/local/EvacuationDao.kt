@@ -131,4 +131,30 @@ interface EvacuationDao {
         """,
     )
     suspend fun findEdgesTouchingNode(nodeId: Long): List<EdgeRow>
+
+    @SkipQueryVerification
+    @Query("SELECT origin_node_id, nearest_tea_id, alt_tea_id FROM tb_tea_routes WHERE origin_node_id = :originNodeId LIMIT 1")
+    suspend fun findTeaRoute(originNodeId: Long): TeaRouteRow?
+
+    @SkipQueryVerification
+    @Query("SELECT tea_id, kapasitas, lat, lon FROM tb_tea WHERE tea_id = :teaId LIMIT 1")
+    suspend fun findTeaById(teaId: String): TeaRow?
+
+    @SkipQueryVerification
+    @Query(
+        """
+        WITH RECURSIVE path AS (
+            SELECT node_id, next_node_id, 1 as step
+            FROM tb_tea_next 
+            WHERE tea_id = :teaId AND node_id = :originNodeId
+            UNION ALL
+            SELECT t.node_id, t.next_node_id, p.step + 1
+            FROM tb_tea_next t
+            INNER JOIN path p ON t.node_id = p.next_node_id
+            WHERE t.tea_id = :teaId
+        )
+        SELECT node_id AS nodeId, next_node_id AS nextNodeId FROM path ORDER BY step ASC
+        """
+    )
+    suspend fun findTeaPathSteps(teaId: String, originNodeId: Long): List<TeaPathStep>
 }
