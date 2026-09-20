@@ -308,6 +308,13 @@ private fun EvacuationContent(
                 .zIndex(20f),
         )
 
+        // Kabar BMKG dianggap sudah dibaca setelah kartunya dibuka.
+        var seenBmkgEventKey by rememberSaveable { mutableStateOf<String?>(null) }
+        val bmkgEventKey = bmkgEventKey(state)
+        val bmkgIsUnread = bmkgEventKey != null && bmkgEventKey != seenBmkgEventKey
+        LaunchedEffect(selectedStatusDetail, bmkgEventKey) {
+            if (selectedStatusDetail == StatusDetailType.BMKG) seenBmkgEventKey = bmkgEventKey
+        }
         if (expansionProgress < 0.5f) {
             EvacuationTopBar(
                 state = state,
@@ -323,6 +330,7 @@ private fun EvacuationContent(
                     .align(Alignment.TopCenter)
                     .padding(top = 12.dp, start = 16.dp, end = 16.dp)
                     .zIndex(30f),
+                bmkgIsUnread = bmkgIsUnread,
             )
         } else {
             StatusColumnV3(
@@ -336,6 +344,7 @@ private fun EvacuationContent(
                     .padding(start = 16.dp, top = EXPANDED_HEADER_HEIGHT + 12.dp)
                     .graphicsLayer(alpha = expansionProgress)
                     .zIndex(30f),
+                bmkgIsUnread = bmkgIsUnread,
             )
         }
         // Detail terakhir dipertahankan selama animasi keluar agar isi popup tidak hilang mendadak.

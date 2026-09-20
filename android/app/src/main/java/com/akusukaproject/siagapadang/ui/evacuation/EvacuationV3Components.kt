@@ -26,6 +26,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -86,6 +90,20 @@ import com.akusukaproject.siagapadang.ui.theme.SiagaWarning
 
 private val CardShape = RoundedCornerShape(28.dp)
 
+/** Satu putaran getaran: sekitar 0,4 detik bergetar lalu diam sampai detik ketiga. */
+private const val SHAKE_CYCLE_MILLIS = 3_000
+
+/**
+ * Penanda kabar gempa yang belum dibuka. Dibentuk dari waktu kejadian dan magnitudonya, bukan
+ * dari waktu pengambilan data, supaya menyegarkan data yang sama tidak dihitung sebagai kabar baru.
+ */
+internal fun bmkgEventKey(state: EvacuationUiState): String? = state.bmkgStatus?.let { status ->
+    listOf(status.eventDate, status.eventTime, status.magnitude)
+        .filter { it.isNotBlank() }
+        .joinToString("|")
+        .takeIf { it.isNotBlank() }
+}
+
 @Composable
 internal fun EvacuationTopBar(
     state: EvacuationUiState,
@@ -93,6 +111,7 @@ internal fun EvacuationTopBar(
     onSelect: (StatusDetailType) -> Unit,
     onOpenMenu: () -> Unit,
     modifier: Modifier = Modifier,
+    bmkgIsUnread: Boolean = false,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -142,8 +161,9 @@ internal fun EvacuationTopBar(
             tint = statusTintOnLight(bmkgStatusColor(state)),
             hasProblem = bmkgHasProblem(state),
             selected = selected == StatusDetailType.BMKG,
-            description = "Lihat informasi BMKG",
+            description = if (bmkgIsUnread) "Ada kabar gempa baru dari BMKG" else "Lihat informasi BMKG",
             onClick = { onSelect(StatusDetailType.BMKG) },
+            needsAttention = bmkgIsUnread,
         )
     }
 }
@@ -154,6 +174,7 @@ internal fun StatusColumnV3(
     selected: StatusDetailType?,
     onSelect: (StatusDetailType) -> Unit,
     modifier: Modifier = Modifier,
+    bmkgIsUnread: Boolean = false,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = modifier) {
         StatusCircle(
@@ -177,8 +198,9 @@ internal fun StatusColumnV3(
             tint = statusTintOnLight(bmkgStatusColor(state)),
             hasProblem = bmkgHasProblem(state),
             selected = selected == StatusDetailType.BMKG,
-            description = "Lihat informasi BMKG",
+            description = if (bmkgIsUnread) "Ada kabar gempa baru dari BMKG" else "Lihat informasi BMKG",
             onClick = { onSelect(StatusDetailType.BMKG) },
+            needsAttention = bmkgIsUnread,
         )
     }
 }
@@ -192,7 +214,28 @@ internal fun StatusCircle(
     description: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    needsAttention: Boolean = false,
 ) {
+    // Getaran pendek berulang, bukan goyangan terus-menerus: cukup menarik mata tanpa
+    // berubah menjadi gangguan selama pengguna sedang berjalan.
+    val shake by rememberInfiniteTransition(label = "getar-ikon").animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = SHAKE_CYCLE_MILLIS
+                0f at 0
+                -12f at 70
+                12f at 140
+                -9f at 210
+                9f at 280
+                -5f at 350
+                0f at 420
+                0f at SHAKE_CYCLE_MILLIS
+            },
+        ),
+        label = "sudut-getar",
+    )
     Box(modifier = modifier.size(48.dp)) {
         Surface(
             color = Color.White,
@@ -206,7 +249,14 @@ internal fun StatusCircle(
                 .semantics { contentDescription = description },
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(painterResource(iconRes), contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+                Icon(
+                    painterResource(iconRes),
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer(rotationZ = if (needsAttention) shake else 0f),
+                )
             }
         }
         if (hasProblem) {
