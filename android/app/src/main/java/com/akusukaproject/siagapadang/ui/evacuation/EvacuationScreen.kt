@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.semantics.heading
+import androidx.compose.foundation.layout.heightIn
 import com.akusukaproject.siagapadang.ui.theme.SiagaTailGray
 import com.akusukaproject.siagapadang.ui.theme.SiagaRustDeep
 import androidx.compose.ui.input.pointer.pointerInput
@@ -285,6 +287,7 @@ private fun EvacuationContent(
                 selectedStatusDetail = null
                 showBlockedRouteDialog = true
             },
+            onRecheckInitialZone = onRecheckInitialZone,
             onMapViewportChanged = onMapViewportChanged,
             modifier = Modifier.align(Alignment.BottomCenter),
             onExpandMap = {
@@ -1976,6 +1979,7 @@ private fun EvacuationMapPanel(
     scale: Float,
     expansionProgress: Float,
     onBlockedRouteClick: () -> Unit,
+    onRecheckInitialZone: () -> Unit,
     onMapViewportChanged: (GeoCoordinate) -> Unit,
     modifier: Modifier = Modifier,
     onExpandMap: () -> Unit = {},
@@ -2125,6 +2129,13 @@ private fun EvacuationMapPanel(
             }
         }
 
+        if (state.isOutsideInundationZoneAtStart) {
+            ExpandedOutsideZoneHeader(
+                zoneCheckMessage = state.initialZoneCheckMessage,
+                modifier = Modifier.graphicsLayer(alpha = expansionProgress),
+            )
+        }
+
         if (state.hasEvacuationWindowExpired) {
             ExpiredMapHeader(
                 scale = scale,
@@ -2194,6 +2205,16 @@ private fun EvacuationMapPanel(
                     .align(Alignment.BottomEnd)
                     .padding(end = 16.dp, bottom = 84.dp)
                     .zIndex(9f),
+            )
+        }
+
+        if (state.isOutsideInundationZoneAtStart) {
+            RecheckPositionButton(
+                isChecking = state.isCheckingInitialZone,
+                onClick = onRecheckInitialZone,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp),
             )
         }
 
@@ -2677,6 +2698,123 @@ private fun CompassDial(scale: Float) {
         drawPath(south, color = SiagaNavy.copy(alpha = 0.85f))
         drawCircle(color = Color.White, radius = radius * 0.09f, center = center)
         drawCircle(color = SiagaNavy, radius = radius * 0.09f, center = center, style = Stroke(1.5.dp.toPx()))
+    }
+}
+
+/**
+ * Kartu ringkas di mode peta besar ketika posisi awal berada di luar zona rendaman. Isinya sama
+ * dengan kartu pada mode peta kecil, dipadatkan agar peta tetap lega — sama seperti perlakuan
+ * kartu arah pada mode evakuasi.
+ */
+@Composable
+private fun ExpandedOutsideZoneHeader(
+    zoneCheckMessage: String?,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = SiagaNavy,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(EXPANDED_HEADER_HEIGHT),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 44.dp, bottom = 16.dp),
+        ) {
+            Surface(
+                color = SiagaSafeGreen,
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(44.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painterResource(R.drawable.ic_ms_location_on),
+                        contentDescription = null,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Di luar zona rendaman",
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = zoneCheckMessage
+                        ?: "Navigasi dan hitung mundur tidak dimulai. Tetap menjauh dari pantai dan sungai.",
+                    color = SiagaOnNavyMuted,
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecheckPositionButton(
+    isChecking: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = Color.White,
+        contentColor = SiagaNavy,
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(2.dp, SiagaNavy),
+        shadowElevation = 8.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(role = Role.Button, enabled = !isChecking, onClick = onClick)
+            .semantics {
+                contentDescription = if (isChecking) {
+                    "Sedang memeriksa posisi"
+                } else {
+                    "Periksa posisi lagi"
+                }
+            },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+        ) {
+            if (isChecking) {
+                CircularProgressIndicator(color = SiagaNavy, strokeWidth = 2.5.dp, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Memeriksa…", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+            } else {
+                Icon(
+                    painterResource(R.drawable.ic_ms_my_location),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("Periksa posisi lagi", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        text = "Bila Anda sudah berpindah tempat",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = SiagaTextSecondary,
+                    )
+                }
+            }
+        }
     }
 }
 
