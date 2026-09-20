@@ -187,6 +187,9 @@ class EvacuationRepository(
             PolylineAssembler.assembleWithEdges(pathNodeIds, edges, nodeCoordinates)
         }
         val destination = dao.findTesByName(destinationName)
+        val destinationKind = runCatching { dao.findFacilityKind(destinationName) }
+            .getOrNull()
+            ?: destination?.let { "TES" }
 
         return EvacuationRoute(
             originNodeId = originNodeId,
@@ -200,6 +203,7 @@ class EvacuationRepository(
             destinationCapacityPeople = destination?.kapasitas?.roundToInt(),
             destinationZoneCode = destination?.zona,
             destinationExternalId = destination?.tesId,
+            destinationKind = destinationKind,
             nodeIds = pathNodeIds,
             edgeIds = assembled.edgeIds,
             edgeCoordinateRanges = assembled.edgeCoordinateRanges,

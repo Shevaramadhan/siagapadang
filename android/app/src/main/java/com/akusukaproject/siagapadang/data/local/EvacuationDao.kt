@@ -111,6 +111,16 @@ interface EvacuationDao {
     )
     suspend fun findAllFacilities(): List<FacilityRow>
 
+    @SkipQueryVerification
+    @Query(
+        """
+        SELECT jenis FROM v_fasilitas_evakuasi
+        WHERE nama = :name
+        LIMIT 1
+        """,
+    )
+    suspend fun findFacilityKind(name: String): String?
+
     // tb_edges hanya menyimpan satu arah, jadi tetangga dicari dari kedua ujung ruas.
     @SkipQueryVerification
     @Query(

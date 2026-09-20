@@ -265,16 +265,39 @@ internal fun InstructionCardV3(
                 fontWeight = FontWeight.Medium,
                 color = SiagaTextSecondary,
             )
-            Text(
-                text = route.destinationName,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 0.3.sp,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+            ) {
+                route.destinationKind?.let { kind ->
+                    Surface(
+                        color = if (kind.uppercase() == "TEA") SiagaSafeGreen else SiagaWarning,
+                        contentColor = SiagaNavy,
+                        shape = RoundedCornerShape(7.dp),
+                    ) {
+                        Text(
+                            text = kind.uppercase(),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.4.sp,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    text = route.destinationName,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.3.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Spacer(Modifier.height(12.dp))
             if (nextSteps.isNotEmpty()) {
                 Row(
@@ -450,20 +473,32 @@ internal fun MapOpenHandle(
                 contentDescription = if (expansionProgress > 0.5f) "Kecilkan peta" else "Perbesar peta"
             },
     ) {
+        // Tetap di tengah tepi peta seperti gagang sebelumnya, tetapi kini bertuliskan
+        // tindakannya. Hanya teksnya yang berganti, tidak ada tombol kedua yang menimpa.
         Surface(
             color = Color.White,
             contentColor = SiagaNavy,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             shadowElevation = 6.dp,
-            modifier = Modifier.size(width = 80.dp, height = 32.dp),
+            modifier = Modifier.height(40.dp),
         ) {
-            Box(contentAlignment = Alignment.Center) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 14.dp),
+            ) {
                 Icon(
                     painterResource(R.drawable.ic_ms_expand_less),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(20.dp)
                         .graphicsLayer(rotationZ = expansionProgress * 180f),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (expansionProgress > 0.5f) "Perkecil peta" else "Perbesar peta",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                 )
             }
         }

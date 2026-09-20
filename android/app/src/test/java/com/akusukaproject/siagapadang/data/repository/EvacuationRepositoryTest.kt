@@ -65,6 +65,8 @@ class EvacuationRepositoryTest {
 
         override suspend fun findAllFacilities(): List<com.akusukaproject.siagapadang.data.local.FacilityRow> = emptyList()
 
+        override suspend fun findFacilityKind(name: String): String? = null
+
         override suspend fun findTesByName(name: String): TesRow? = when (name) {
             "TES Masjid Raya" -> TesRow(
                 tesId = "TES_01",

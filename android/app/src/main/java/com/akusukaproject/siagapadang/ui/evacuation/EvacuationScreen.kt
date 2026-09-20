@@ -1970,8 +1970,10 @@ private fun EvacuationMapPanel(
                 }
                 if (routeChangeNotice != null) {
                     RouteChangeNotice(message = routeChangeNotice.orEmpty(), scale = scale)
-                } else if (state.previousRoutes.isNotEmpty() && expansionProgress >= 0.5f) {
-                    // Hanya pada peta besar. Pada peta kecil ruangnya dipakai untuk melihat jalan.
+                }
+                // Daftar tujuan sebelumnya tetap terlihat walau pemberitahuan sedang tampil,
+                // supaya pengguna masih bisa membaca nama tempat yang baru saja ditinggalkan.
+                if (state.previousRoutes.isNotEmpty() && expansionProgress >= 0.5f) {
                     PreviousRoutesPill(routes = state.previousRoutes)
                 }
             }
@@ -1998,20 +2000,17 @@ private fun EvacuationMapPanel(
             )
         }
 
-        // Kompas menempati kolom kiri di bawah tiga ikon status. Pada mode peta kecil kompas
-        // disembunyikan: panah besar di kartu arah sudah menunjukkan hal yang sama, dan ruang
-        // petanya terlalu sempit untuk ditutupi.
-        if (expansionProgress > 0.05f) {
-            NavigationCompass(
-                headingDegrees = state.deviceHeadingDegrees ?: 0f,
-                scale = scale,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 16.dp, top = EXPANDED_HEADER_HEIGHT + 184.dp)
-                    .size(56.dp)
-                    .graphicsLayer(alpha = expansionProgress),
-            )
-        }
+        NavigationCompass(
+            headingDegrees = state.deviceHeadingDegrees ?: 0f,
+            scale = scale,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(
+                    x = -lerp((12f * scale).dp, (14f * scale).dp, expansionProgress),
+                    y = lerp((18f * scale).dp, EXPANDED_HEADER_HEIGHT + 12.dp, expansionProgress),
+                )
+                .size(lerp((60f * scale).dp, (60f * scale).dp, expansionProgress)),
+        )
 
         zoneStatusNotice?.let { message ->
             ZoneStatusNotice(
@@ -2040,7 +2039,8 @@ private fun EvacuationMapPanel(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 84.dp),
+                    .padding(end = 16.dp, bottom = 84.dp)
+                    .zIndex(9f),
             )
         }
 
@@ -2291,34 +2291,78 @@ private fun PreviousRoutesPill(
             }
             if (expanded) {
                 Text(
-                    text = "Tergambar samar di peta sebagai pembanding. Rute ini tidak dipakai lagi.",
+                    text = "Tergambar samar di peta sebagai pembanding. Tujuan ini tidak dipakai lagi.",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = SiagaTextSecondary,
                 )
                 routes.forEachIndexed { index, route ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        PreviousRouteDash()
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = if (index == 0) "Rute utama" else "Alternatif $index",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                text = "${route.destinationName} · ±${estimatedMinutes(route)} menit",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = SiagaTextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
+                    PreviousRouteItem(
+                        order = if (index == 0) "Tujuan awal" else "Alternatif $index",
+                        route = route,
+                    )
                 }
             }
         }
+    }
+}
+
+/** Satu baris tujuan yang ditinggalkan: urutan, jenis fasilitas, nama, dan perkiraan waktunya. */
+@Composable
+private fun PreviousRouteItem(
+    order: String,
+    route: EvacuationRoute,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.widthIn(max = 260.dp)) {
+        Icon(
+            painterResource(R.drawable.ic_ms_arrow_forward),
+            contentDescription = null,
+            tint = SiagaTailGray,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FacilityKindBadge(kind = route.destinationKind)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = route.destinationName,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = "$order · ±${estimatedMinutes(route)} menit",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = SiagaTextSecondary,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
+ * Penanda jenis fasilitas. TES adalah gedung bertingkat, TEA kawasan perbukitan; keduanya
+ * dibedakan agar pengguna tahu tempat seperti apa yang dituju.
+ */
+@Composable
+private fun FacilityKindBadge(kind: String?) {
+    val label = kind?.uppercase() ?: return
+    Surface(
+        color = if (label == "TEA") SiagaSafeGreen else SiagaWarning,
+        contentColor = SiagaNavy,
+        shape = RoundedCornerShape(6.dp),
+    ) {
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.4.sp,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+        )
     }
 }
 
@@ -2588,30 +2632,75 @@ private fun RecenterMapButton(
     // Saat peta masih mengikuti posisi, tombol ini tidak ada gunanya ditekan, jadi tampil tenang.
     // Begitu pengguna menggeser peta, tombol berubah jadi navy pekat — perbedaannya terbaca
     // sekilas tanpa harus membandingkan dua keadaan berdampingan.
-    Surface(
-        color = if (isFollowing) Color.White else SiagaNavy,
-        contentColor = if (isFollowing) SiagaTextSecondary else Color.White,
-        shape = CircleShape,
-        border = if (isFollowing) BorderStroke(1.dp, SiagaLine) else null,
-        shadowElevation = if (isFollowing) 4.dp else 8.dp,
-        modifier = modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics {
-                contentDescription = if (isFollowing) {
-                    "Peta mengikuti posisi Anda"
-                } else {
-                    "Peta tidak lagi terpusat. Kembali ke lokasi saya"
+    Column(horizontalAlignment = Alignment.End, modifier = modifier) {
+        // Gelembung keterangan hanya muncul saat peta tidak lagi mengikuti posisi, supaya
+        // pengguna tahu apa yang akan terjadi sebelum menekan tombolnya.
+        AnimatedVisibility(
+            visible = !isFollowing,
+            enter = fadeIn(tween(UI_ANIMATION_MILLIS)) + scaleIn(
+                initialScale = 0.9f,
+                transformOrigin = TransformOrigin(1f, 1f),
+                animationSpec = tween(UI_ANIMATION_MILLIS, easing = FastOutSlowInEasing),
+            ),
+            exit = fadeOut(tween(UI_ANIMATION_MILLIS / 2)),
+        ) {
+            Column(horizontalAlignment = Alignment.End) {
+                Surface(
+                    color = SiagaNavy,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(14.dp),
+                    shadowElevation = 6.dp,
+                ) {
+                    Text(
+                        text = "Kembali ke titik Anda",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
                 }
-            },
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                painterResource(if (isFollowing) R.drawable.ic_ms_my_location else R.drawable.ic_ms_navigation),
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-            )
+                Canvas(
+                    modifier = Modifier
+                        .padding(end = 18.dp)
+                        .size(width = 14.dp, height = 7.dp),
+                ) {
+                    drawPath(
+                        Path().apply {
+                            moveTo(0f, 0f)
+                            lineTo(size.width, 0f)
+                            lineTo(size.width / 2f, size.height)
+                            close()
+                        },
+                        color = SiagaNavy,
+                    )
+                }
+            }
+        }
+        Surface(
+            color = if (isFollowing) Color.White else SiagaNavy,
+            contentColor = if (isFollowing) SiagaTextSecondary else Color.White,
+            shape = CircleShape,
+            border = if (isFollowing) BorderStroke(1.dp, SiagaLine) else null,
+            shadowElevation = if (isFollowing) 4.dp else 8.dp,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics {
+                    contentDescription = if (isFollowing) {
+                        "Peta mengikuti posisi Anda"
+                    } else {
+                        "Peta tidak lagi terpusat. Kembali ke titik Anda"
+                    }
+                },
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painterResource(if (isFollowing) R.drawable.ic_ms_my_location else R.drawable.ic_ms_navigation),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
         }
     }
 }
