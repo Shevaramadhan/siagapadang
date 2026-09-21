@@ -22,3 +22,10 @@ internal fun decideInitialZone(
         is InundationZoneStatus.InsideRecordedZone -> InitialZoneDecision.INSIDE_RECORDED_ZONE
     }
 }
+
+internal fun shouldAwaitAccurateOutsideZone(
+    status: InundationZoneStatus,
+    accuracyMeters: Float?,
+    maximumAccuracyMeters: Float,
+): Boolean = status == InundationZoneStatus.OutsideRecordedZone &&
+    decideInitialZone(status, accuracyMeters, maximumAccuracyMeters) == InitialZoneDecision.UNCONFIRMED

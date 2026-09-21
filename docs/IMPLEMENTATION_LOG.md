@@ -205,3 +205,14 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Unit test Android: 130 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
 - Validasi langsung pada keadaan luar zona menunjukkan pil dan tombol sejajar pada sisi kiri, memiliki
   jarak vertikal 49 piksel, dan tidak bertabrakan dengan tombol pusatkan peta di sisi kanan.
+
+## 21 September 2026 — Pemeriksaan Zona Sebelum Menampilkan Rute
+
+- Branch: `fix/initial-zone-before-route`; belum di-push.
+- Jika pembacaan awal berada di luar zona tetapi akurasi GPS masih di atas 35 meter, aplikasi kini
+  menahan pembuatan rute dan menampilkan **Menunggu GPS lebih akurat…**.
+- Rute baru disiapkan setelah posisi terbaca di dalam zona. Jika data zona tidak tersedia, rute tetap
+  disiapkan sebagai arahan keselamatan cadangan.
+- Unit test Android: 134 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+- Enam sampel keadaan layar setelah aplikasi dimulai ulang menunjukkan urutan **Menunggu GPS lebih
+  akurat** lalu **Anda berada di luar zona rendaman** tanpa kartu atau teks rute muncul di antaranya.

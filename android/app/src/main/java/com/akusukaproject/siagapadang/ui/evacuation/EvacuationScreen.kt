@@ -3233,8 +3233,13 @@ private fun RoutePreparationState(
             detail = "Pastikan GPS perangkat aktif. Arahan tetap disiapkan tanpa jaringan."
         }
         state.isCheckingInitialZone -> {
-            title = "Memeriksa zona…"
-            detail = "Posisi awal diperiksa dari data zona yang tersimpan di perangkat."
+            title = if (state.initialZoneCheckMessage == null) {
+                "Memeriksa zona…"
+            } else {
+                "Menunggu GPS lebih akurat…"
+            }
+            detail = state.initialZoneCheckMessage
+                ?: "Posisi awal diperiksa dari data zona yang tersimpan di perangkat."
         }
         else -> {
             title = "Menyiapkan arahan…"

@@ -2,6 +2,8 @@ package com.akusukaproject.siagapadang.ui.evacuation
 
 import com.akusukaproject.siagapadang.data.model.InundationZoneStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InitialZoneDecisionTest {
@@ -38,6 +40,50 @@ class InitialZoneDecisionTest {
         assertEquals(
             InitialZoneDecision.UNCONFIRMED,
             decideInitialZone(InundationZoneStatus.DataUnavailable, 8f, 35f),
+        )
+    }
+
+    @Test
+    fun `weak outside reading waits before route is prepared`() {
+        assertTrue(
+            shouldAwaitAccurateOutsideZone(
+                InundationZoneStatus.OutsideRecordedZone,
+                60f,
+                35f,
+            ),
+        )
+    }
+
+    @Test
+    fun `accurate outside reading does not keep waiting`() {
+        assertFalse(
+            shouldAwaitAccurateOutsideZone(
+                InundationZoneStatus.OutsideRecordedZone,
+                12f,
+                35f,
+            ),
+        )
+    }
+
+    @Test
+    fun `weak inside reading keeps evacuation fallback available`() {
+        assertFalse(
+            shouldAwaitAccurateOutsideZone(
+                InundationZoneStatus.InsideRecordedZone("Zona A", "tinggi"),
+                60f,
+                35f,
+            ),
+        )
+    }
+
+    @Test
+    fun `unavailable zone data keeps evacuation fallback available`() {
+        assertFalse(
+            shouldAwaitAccurateOutsideZone(
+                InundationZoneStatus.DataUnavailable,
+                12f,
+                35f,
+            ),
         )
     }
 }

@@ -807,7 +807,6 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
             mutableUiState.update {
                 it.copy(
                     isCheckingInitialZone = true,
-                    initialZoneCheckMessage = null,
                 )
             }
             val result = runCatching { zoneRepository.findStatus(deviceLocation.coordinate) }
@@ -819,9 +818,27 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
             }
             if (mutableUiState.value.isOutsideInundationZoneAtStart) return@launch
 
-            // Jika data zona atau akurasi GPS belum cukup, arahan evakuasi tetap disiapkan.
-            // Pembaruan lokasi berikutnya akan terus memeriksa zona dan dapat menghentikan
-            // navigasi bila posisi luar zona kemudian terkonfirmasi dengan akurat.
+            if (
+                status != null &&
+                shouldAwaitAccurateOutsideZone(
+                    status = status,
+                    accuracyMeters = deviceLocation.accuracyMeters,
+                    maximumAccuracyMeters = MAX_ZONE_ACCURACY_METERS,
+                )
+            ) {
+                mutableUiState.update {
+                    it.copy(
+                        isCheckingInitialZone = true,
+                        initialZoneCheckMessage =
+                            "GPS belum cukup akurat untuk memastikan posisi aman. Cari tempat yang lebih terbuka.",
+                    )
+                }
+                return@launch
+            }
+
+            // Jika data zona tidak tersedia atau posisi terbaca di dalam zona, arahan evakuasi
+            // tetap disiapkan. Hasil luar zona dengan GPS lemah ditahan sampai lokasi lebih akurat
+            // agar rute tidak sempat muncul sebelum posisi aman dikonfirmasi.
             initialLocationResolved = true
             mutableUiState.update { it.copy(isCheckingInitialZone = false) }
             requestInitialRoute(mutableUiState.value.currentLocation ?: deviceLocation.coordinate)
