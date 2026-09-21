@@ -147,3 +147,14 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
   dibuka di luar zona, tidak ada hitung mundur atau tombol **Ada kendala?**, pemeriksaan ulang
   menampilkan “Posisi masih berada di luar zona rendaman.”, dan mode peta besar tetap bersih dari
   kontrol rute.
+## 21 September 2026 — Kontrol Lapisan Peta TES & TEA
+
+- Branch: `feat/facility-map-layers`; belum di-push.
+- Mode peta pada daftar TES & TEA kini memuat poligon zona dari basis data lokal.
+- Tombol **Lapisan** membuka sakelar terpisah untuk zona rendaman, titik TES, dan titik TEA.
+- Legenda membedakan area di luar zona rendaman serta bahaya rendah, sedang, dan tinggi.
+- Lapisan dapat dimatikan dan dihidupkan kembali tanpa membuka ulang layar. Fasilitas terpilih dan
+  kartunya ikut disembunyikan jika jenis fasilitas dimatikan.
+- Unit test Android: 130 lulus, 0 gagal.
+- Pemeriksaan Infinix X6855 lulus: zona, TES, dan TEA dapat dimatikan secara terpisah; siklus zona
+  mati lalu hidup kembali memulihkan poligon dan garis batas.
