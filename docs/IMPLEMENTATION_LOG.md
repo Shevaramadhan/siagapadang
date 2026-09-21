@@ -216,3 +216,17 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Unit test Android: 134 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
 - Enam sampel keadaan layar setelah aplikasi dimulai ulang menunjukkan urutan **Menunggu GPS lebih
   akurat** lalu **Anda berada di luar zona rendaman** tanpa kartu atau teks rute muncul di antaranya.
+
+## 21 September 2026 — Popup Pemeriksaan, Ilustrasi, dan Orientasi Terakhir
+
+- Branch: `fix/outside-zone-popup-artwork`; belum di-push.
+- Hasil tombol **Periksa posisi lagi** kini muncul sebagai popup di tengah layar, dapat ditutup, dan
+  hilang otomatis setelah empat detik. Pesan hasil tidak lagi mengganti keterangan pada kartu aman.
+- Ilustrasi luar zona pada kartu kecil sekarang memenuhi tinggi kartu dengan crop terarah. Pada header
+  peta besar, rasio asli aset dipertahankan agar karakter dan latar tidak terlihat gepeng.
+- Halaman **Orientasi terakhir** memakai kartu putih lebar, panel arah biru, bagian tujuan yang jelas,
+  serta kartu peringatan terpisah. Mode peta besar kini memiliki header orientasi dengan arah, jarak,
+  dan nama tujuan.
+- Unit test Android: 134 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+- Popup pemeriksaan serta orientasi terakhir pada peta kecil dan besar sudah diperiksa langsung. State
+  orientasi dipicu dengan menghabiskan tiga rute sebelumnya; teks, ikon, dan kontrol tidak terpotong.

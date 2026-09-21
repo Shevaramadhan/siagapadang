@@ -985,6 +985,10 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun dismissInitialZoneCheckMessage() {
+        mutableUiState.update { it.copy(initialZoneCheckMessage = null) }
+    }
+
     fun recheckInitialZone() {
         val location = mutableUiState.value.currentLocation
         val accuracyMeters = mutableUiState.value.locationAccuracyMeters
