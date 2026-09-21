@@ -15,6 +15,7 @@ import com.akusukaproject.siagapadang.MainActivity
 import com.akusukaproject.siagapadang.R
 import com.akusukaproject.siagapadang.SiagaPadangApplication
 import com.akusukaproject.siagapadang.data.model.EvacuationSummary
+import com.akusukaproject.siagapadang.data.model.GeoCoordinate
 import com.akusukaproject.siagapadang.data.model.InundationZoneStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,9 +52,15 @@ abstract class BaseEvacuationWidgetProvider(
                 refreshWidgets(context, manager, ids, goAsync())
             }
 
-            ACTION_REFRESH -> {
+            ACTION_DATA_CHANGED -> {
                 val manager = AppWidgetManager.getInstance(context)
-                refreshWidgets(context, manager, allWidgetIds(context, manager), goAsync())
+                refreshWidgets(
+                    context = context,
+                    manager = manager,
+                    widgetIds = allWidgetIds(context, manager),
+                    pendingResult = goAsync(),
+                    coordinateHint = intent.coordinateHint(),
+                )
             }
 
             else -> super.onReceive(context, intent)
@@ -65,6 +72,7 @@ abstract class BaseEvacuationWidgetProvider(
         manager: AppWidgetManager,
         widgetIds: IntArray,
         pendingResult: PendingResult,
+        coordinateHint: GeoCoordinate? = null,
     ) {
         if (widgetIds.isEmpty()) {
             pendingResult.finish()
@@ -83,7 +91,7 @@ abstract class BaseEvacuationWidgetProvider(
 
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val state = loadState(context)
+                val state = loadState(context, coordinateHint)
                 val views = createViews(context) { remoteViews ->
                     bindState(remoteViews, context, state)
                 }
@@ -94,22 +102,25 @@ abstract class BaseEvacuationWidgetProvider(
         }
     }
 
-    private suspend fun loadState(context: Context): WidgetState {
+    private suspend fun loadState(
+        context: Context,
+        coordinateHint: GeoCoordinate?,
+    ): WidgetState {
         if (!hasLocationPermission(context)) return WidgetState.PermissionRequired
 
         val application = context.applicationContext as SiagaPadangApplication
-        val location = runCatching {
-            application.locationProvider.currentOrLastKnownLocation()
+        val coordinate = coordinateHint ?: runCatching {
+            application.locationProvider.currentOrLastKnownLocation()?.coordinate
         }.getOrNull() ?: return WidgetState.LocationUnavailable
 
         return coroutineScope {
             val zoneStatus = async {
-                runCatching { application.zoneRepository.findStatus(location.coordinate) }
+                runCatching { application.zoneRepository.findStatus(coordinate) }
                     .getOrDefault(InundationZoneStatus.DataUnavailable)
             }
             val summary = async {
                 runCatching {
-                    application.evacuationRepository.findSummaryFromLocation(location.coordinate)
+                    application.evacuationRepository.findSummaryFromLocation(coordinate)
                 }.getOrNull()
             }
             WidgetState.Ready(
@@ -278,19 +289,19 @@ abstract class BaseEvacuationWidgetProvider(
                 Intent(context, MainActivity::class.java),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            val refreshPendingIntent = PendingIntent.getBroadcast(
-                context,
-                REFRESH_REQUEST_CODE,
-                Intent(context, this@BaseEvacuationWidgetProvider.javaClass).apply {
-                    action = ACTION_REFRESH
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-
-            setOnClickPendingIntent(R.id.widget_root, refreshPendingIntent)
+            setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent)
+            setOnClickPendingIntent(R.id.widget_card, openAppPendingIntent)
             setOnClickPendingIntent(R.id.widget_action_left, openAppPendingIntent)
             setOnClickPendingIntent(R.id.widget_action_right, openAppPendingIntent)
         }
+
+    private fun Intent.coordinateHint(): GeoCoordinate? {
+        if (!hasExtra(EXTRA_LATITUDE) || !hasExtra(EXTRA_LONGITUDE)) return null
+        return GeoCoordinate(
+            latitude = getDoubleExtra(EXTRA_LATITUDE, Double.NaN),
+            longitude = getDoubleExtra(EXTRA_LONGITUDE, Double.NaN),
+        ).takeIf { it.latitude.isFinite() && it.longitude.isFinite() }
+    }
 
     private fun hasLocationPermission(context: Context): Boolean =
         context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -317,10 +328,11 @@ abstract class BaseEvacuationWidgetProvider(
         ) : WidgetState
     }
 
-    private companion object {
-        const val ACTION_REFRESH = "com.akusukaproject.siagapadang.widget.REFRESH"
+    companion object {
+        const val ACTION_DATA_CHANGED = "com.akusukaproject.siagapadang.widget.DATA_CHANGED"
+        const val EXTRA_LATITUDE = "widget_latitude"
+        const val EXTRA_LONGITUDE = "widget_longitude"
         const val OPEN_APP_REQUEST_CODE = 100
-        const val REFRESH_REQUEST_CODE = 101
     }
 }
 

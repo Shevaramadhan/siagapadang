@@ -172,3 +172,16 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Unit test Android: 130 lulus, 0 gagal.
 - APK ARM64 dipasang pada Infinix X6855. Tampilan peta kecil, peta besar, serta hasil pemeriksaan ulang
   diperiksa langsung; ilustrasi dan teks terbaca, dan kedua tombol memiliki jarak yang cukup.
+## 21 September 2026 — Pembaruan Otomatis dan Interaksi Widget
+
+- Branch: `feat/widget-auto-refresh`; belum di-push.
+- Lokasi yang diterima layar evakuasi sekarang langsung dikirim ke widget lebar dan ringkas. Frekuensi
+  pembaruan dibatasi paling sering setiap 15 detik agar aliran GPS tidak membuka database setiap detik.
+- Kedua widget juga meminta pembaruan berkala sistem setiap 30 menit ketika aplikasi tidak aktif.
+- Seluruh permukaan kartu widget membuka aplikasi. Tombol tindakan tetap membuka tujuan yang sama.
+- Judul dan rincian status memakai maksimal dua baris; ukuran teks dan posisi informasi rute disesuaikan
+  agar kalimat tidak dipotong atau bertumpuk pada widget 2 × 2 maupun 4 × 2.
+- Unit test Android: 130 lulus, 0 gagal.
+- Pengujian Infinix X6855 lulus: sentuhan pada judul membuka aplikasi, status berubah otomatis dari
+  “Lokasi belum terbaca” menjadi “Lokasi di luar zona rendaman” setelah GPS aplikasi memperoleh lokasi,
+  dan judul serta rincian tampil penuh tanpa elipsis. Tidak ditemukan crash pada log perangkat.

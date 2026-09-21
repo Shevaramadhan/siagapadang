@@ -31,6 +31,7 @@ import com.akusukaproject.siagapadang.domain.NearestNodeFinder
 import com.akusukaproject.siagapadang.domain.RouteGuidanceCalculator
 import com.akusukaproject.siagapadang.domain.RouteGuidanceSnapshot
 import com.akusukaproject.siagapadang.domain.ZoneExitConfirmationTracker
+import com.akusukaproject.siagapadang.widget.EvacuationWidgetUpdater
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -143,6 +144,7 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun onLocationPermissionChanged(granted: Boolean) {
+        EvacuationWidgetUpdater.requestUpdate(app)
         mutableUiState.update { state ->
             state.copy(
                 hasLocationPermission = granted,
@@ -743,6 +745,10 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
                         }
                     }
                     .collect { deviceLocation ->
+                        EvacuationWidgetUpdater.notifyLocationChanged(
+                            context = app,
+                            coordinate = deviceLocation.coordinate,
+                        )
                         var arrivalConfirmedNow = false
                         mutableUiState.update { state ->
                             val updatedState = withArrivalEvaluation(
