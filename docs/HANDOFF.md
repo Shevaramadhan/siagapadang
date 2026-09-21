@@ -194,6 +194,7 @@ Galat yang sudah pernah ditemukan **hanya karena diuji di perangkat**, bukan lew
 
 - **Perilaku saat hitung mundur habis.** Sekarang tidak terjadi apa-apa: `startCountdown()` berhenti di `00:00` lalu perulangannya putus. Arahan "terus berjalan" menjadi keliru pada titik itu. Kalimat penggantinya arahan keselamatan, jadi harus divalidasi BPBD (Q-03).
 - **P1-09 posisi awal di luar zona rendaman sudah dikerjakan di branch `feat/p1-outside-zone-start`.** Pemeriksaan zona lokal kini mendahului rute dan hitung mundur. Posisi luar zona dengan akurasi GPS maksimal 35 meter menampilkan layar khusus serta tombol pemeriksaan ulang; GPS lemah atau data zona tidak tersedia tetap memakai arahan evakuasi sebagai fallback. Unit test dan uji Infinix X6855 lulus. Branch belum di-push atas arahan pengguna.
+- **Tampilan lanjutan P1-09 dikerjakan di branch `feat/outside-zone-widget-design`.** Kartu layar evakuasi dan header peta besar kini mengikuti desain widget dengan ilustrasi gunung serta karakter. Tombol **Periksa posisi lagi** dibuat ringkas di kiri bawah dan tombol pusatkan tetap di kanan bawah. Sebanyak 130 unit test lulus dan tampilan peta kecil, peta besar, serta hasil pemeriksaan ulang sudah diuji pada Infinix X6855. Branch belum di-push.
 - **Pemberitahuan bila pengguna mengikuti rute lama** setelah berpindah ke alternatif tujuan.
 - Uji lapangan pengalihan keluar jalur.
 - Bersihkan composable lama yang tidak terpakai di `EvacuationScreen.kt` (berkas sudah di atas 3.500 baris).
@@ -282,4 +283,3 @@ Commit `bce00dd` dari Sheva mengubah **sepuluh berkas di `android/`** — termas
 Isi perubahannya sendiri berguna — dialog konfirmasi check-in dan pembacaan rute TEA (`findTeaRoute`, `findTeaPathSteps`). Kueri TEA itu menelusuri `tb_tea_next` per lompatan dengan CTE rekursif; itu **sah** karena membaca data prakomputasi, bukan pencarian lintasan, tetapi waktunya belum diukur terhadap NF-02. Pekerjaan TEA juga milik issue #1 yang ditugaskan ke Habib, jadi perlu disepakati siapa yang melanjutkan.
 
 **Pelajaran untuk penerus:** setelah `git pull`, jalankan `:android:app:testDebugUnitTest` sebelum melanjutkan. Rebase yang bersih tidak berarti kodenya masih dapat dikompilasi.
-

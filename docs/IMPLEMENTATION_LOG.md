@@ -158,3 +158,17 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Unit test Android: 130 lulus, 0 gagal.
 - Pemeriksaan Infinix X6855 lulus: zona, TES, dan TEA dapat dimatikan secara terpisah; siklus zona
   mati lalu hidup kembali memulihkan poligon dan garis batas.
+
+## 21 September 2026 — Tampilan Widget untuk Posisi di Luar Zona Rendaman
+
+- Branch: `feat/outside-zone-widget-design`; belum di-push.
+- Kartu posisi awal di luar zona pada layar evakuasi memakai desain yang sama dengan widget:
+  latar biru langit, ilustrasi pegunungan, karakter, dan arahan singkat untuk menjauhi pantai serta
+  sungai.
+- Header pada mode peta besar memakai ilustrasi dan susunan informasi yang sama. Pesan hasil
+  pemeriksaan ulang tetap ditampilkan pada header tanpa mengembalikan kontrol rute atau hitung mundur.
+- Tombol **Periksa posisi lagi** dipadatkan dan ditempatkan di kiri bawah. Tombol pusatkan peta berada
+  di kanan bawah sehingga kedua tombol tidak saling menutupi.
+- Unit test Android: 130 lulus, 0 gagal.
+- APK ARM64 dipasang pada Infinix X6855. Tampilan peta kecil, peta besar, serta hasil pemeriksaan ulang
+  diperiksa langsung; ilustrasi dan teks terbaca, dan kedua tombol memiliki jarak yang cukup.

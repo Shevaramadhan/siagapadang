@@ -55,6 +55,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.akusukaproject.siagapadang.data.remote.model.OccupancyStatusResponseDto
@@ -2200,7 +2201,9 @@ private fun EvacuationMapPanel(
                     .align(Alignment.BottomEnd)
                     .padding(
                         end = 16.dp,
-                        bottom = if (bottomActionHeightPx > 0) {
+                        bottom = if (state.isOutsideInundationZoneAtStart) {
+                            16.dp
+                        } else if (bottomActionHeightPx > 0) {
                             with(LocalDensity.current) { bottomActionHeightPx.toDp() } + 12.dp
                         } else {
                             96.dp
@@ -2215,9 +2218,9 @@ private fun EvacuationMapPanel(
                 isChecking = state.isCheckingInitialZone,
                 onClick = onRecheckInitialZone,
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp)
-                    .onSizeChanged { bottomActionHeightPx = it.height },
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp, bottom = 16.dp)
+                    .widthIn(min = 190.dp, max = 220.dp),
             )
         }
 
@@ -2716,7 +2719,7 @@ private fun ExpandedOutsideZoneHeader(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = SiagaNavy,
+        color = WidgetSafeBlue,
         contentColor = Color.White,
         shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
         shadowElevation = 6.dp,
@@ -2724,49 +2727,54 @@ private fun ExpandedOutsideZoneHeader(
             .fillMaxWidth()
             .height(EXPANDED_HEADER_HEIGHT),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 44.dp, bottom = 16.dp),
-        ) {
-            Surface(
-                color = SiagaSafeGreen,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(44.dp),
+        Box(modifier = Modifier.fillMaxSize()) {
+            Image(
+                painter = painterResource(R.drawable.figma_widget_safe_bg),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .width(195.dp)
+                    .height(EXPANDED_HEADER_HEIGHT),
+            )
+            Image(
+                painter = painterResource(R.drawable.figma_widget_safe_character),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .width(220.dp)
+                    .height(EXPANDED_HEADER_HEIGHT),
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth(0.72f)
+                    .padding(start = 16.dp, top = 28.dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painterResource(R.drawable.ic_ms_location_on),
-                        contentDescription = null,
-                        modifier = Modifier.size(26.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Di luar zona rendaman",
+                    text = "Anda berada di luar zona rendaman",
                     fontSize = 19.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
+                    lineHeight = 22.sp,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
                     text = zoneCheckMessage
-                        ?: "Navigasi dan hitung mundur tidak dimulai. Tetap menjauh dari pantai dan sungai.",
-                    color = SiagaOnNavyMuted,
-                    fontSize = 13.sp,
-                    lineHeight = 17.sp,
+                        ?: "Berdasarkan data zona yang tersimpan di HP.",
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
     }
 }
-
 @Composable
 private fun RecheckPositionButton(
     isChecking: Boolean,
@@ -2776,13 +2784,13 @@ private fun RecheckPositionButton(
     Surface(
         color = Color.White,
         contentColor = SiagaNavy,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         border = BorderStroke(2.dp, SiagaNavy),
         shadowElevation = 8.dp,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .heightIn(min = 50.dp)
+            .clip(RoundedCornerShape(18.dp))
             .clickable(role = Role.Button, enabled = !isChecking, onClick = onClick)
             .semantics {
                 contentDescription = if (isChecking) {
@@ -2795,33 +2803,33 @@ private fun RecheckPositionButton(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             if (isChecking) {
-                CircularProgressIndicator(color = SiagaNavy, strokeWidth = 2.5.dp, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Memeriksa…", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                CircularProgressIndicator(
+                    color = SiagaNavy,
+                    strokeWidth = 2.5.dp,
+                    modifier = Modifier.size(19.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Memeriksa...", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
             } else {
                 Icon(
                     painterResource(R.drawable.ic_ms_my_location),
                     contentDescription = null,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(20.dp),
                 )
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text("Periksa posisi lagi", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                    Text(
-                        text = "Bila Anda sudah berpindah tempat",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = SiagaTextSecondary,
-                    )
-                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Periksa posisi lagi",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                )
             }
         }
     }
 }
-
 @Composable
 private fun ExpandedMapHeader(
     route: EvacuationRoute,
@@ -3281,72 +3289,97 @@ private fun OutsideZoneStartState(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = SiagaCream,
-        contentColor = SiagaNavy,
+        color = WidgetSafeBlue,
+        contentColor = Color.White,
         shape = RoundedCornerShape((22f * scale).dp),
         shadowElevation = 8.dp,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .height((238f * scale).dp),
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy((12f * scale).dp),
-            modifier = Modifier.padding((20f * scale).dp),
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape((22f * scale).dp)),
         ) {
-            Surface(
-                color = SiagaSafeGreen,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size((52f * scale).dp),
+            Image(
+                painter = painterResource(R.drawable.figma_widget_safe_bg),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth(0.62f)
+                    .height((184f * scale).dp),
+            )
+            Image(
+                painter = painterResource(R.drawable.figma_widget_safe_character),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .fillMaxWidth(0.72f)
+                    .height((184f * scale).dp),
+            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy((5f * scale).dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth(0.76f)
+                    .padding(start = (18f * scale).dp, top = (18f * scale).dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_ms_location_on),
+                Text(
+                    text = "Anda berada di luar zona rendaman",
+                    fontSize = (22f * scale).sp,
+                    lineHeight = (25f * scale).sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = state.initialZoneCheckMessage
+                        ?: "Berdasarkan data zona yang tersimpan di HP.",
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = (12f * scale).sp,
+                    lineHeight = (15f * scale).sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Surface(
+                color = SiagaNavy,
+                contentColor = Color.White,
+                shape = RoundedCornerShape((14f * scale).dp),
+                shadowElevation = 3.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = (16f * scale).dp, bottom = (16f * scale).dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(
+                        horizontal = (12f * scale).dp,
+                        vertical = (9f * scale).dp,
+                    ),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.figma_widget_safe_button_icon),
                         contentDescription = null,
-                        modifier = Modifier.size((30f * scale).dp),
+                        modifier = Modifier.size((19f * scale).dp),
+                    )
+                    Spacer(Modifier.width((7f * scale).dp))
+                    Text(
+                        text = "Jauhi pantai dan sungai",
+                        fontSize = (12f * scale).sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
                     )
                 }
-            }
-            Text(
-                text = "Anda berada di luar zona rendaman",
-                fontSize = (22f * scale).sp,
-                lineHeight = (26f * scale).sp,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "Navigasi dan hitung mundur tidak dimulai karena posisi awal berada di luar zona rendaman yang tercatat.",
-                fontSize = (14f * scale).sp,
-                lineHeight = (19f * scale).sp,
-                textAlign = TextAlign.Center,
-            )
-            Surface(
-                color = Color.White,
-                contentColor = SiagaNavy,
-                shape = RoundedCornerShape((14f * scale).dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = "Tetap menjauh dari pantai dan sungai. Ikuti petugas atau rambu evakuasi.",
-                    fontSize = (13f * scale).sp,
-                    lineHeight = (18f * scale).sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding((14f * scale).dp),
-                )
-            }
-            state.initialZoneCheckMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = SiagaTextSecondary,
-                    fontSize = (12f * scale).sp,
-                    lineHeight = (16f * scale).sp,
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }
 }
-
 @Composable
 private fun ActionButton(text: String, onClick: () -> Unit) {
     Button(
@@ -4177,6 +4210,7 @@ private val MAP_PANEL_SPRING = tween<Float>(durationMillis = 340, easing = FastO
 
 private const val OBSTRUCTION_MESSAGE_VISIBLE_MILLIS = 8_000L
 internal const val UI_ANIMATION_MILLIS = 280
+private val WidgetSafeBlue = Color(0xFF6AC6FF)
 private val TOP_BAR_SPACE = 76.dp
 private val EXPANDED_HEADER_HEIGHT = 150.dp
 private val MAP_HANDLE_SPACE = 28.dp
