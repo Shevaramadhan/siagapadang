@@ -34,4 +34,6 @@ data class BmkgStatus(
     /** Gempa regional terdekat dari Padang (radius 1.500 km); null jika tidak ada. */
     val regionalEvent: RegionalEarthquake? = null,
     val regionalDataStatus: String? = null,
+    /** Waktu kejadian utama dalam format ISO dari BMKG; dipakai menghitung umur kabar. */
+    val isoDateTime: String? = null,
 )

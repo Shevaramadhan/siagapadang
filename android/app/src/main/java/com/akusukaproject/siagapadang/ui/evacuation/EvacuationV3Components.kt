@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -236,7 +237,8 @@ internal fun StatusCircle(
 ) {
     // Getaran pendek berulang, bukan goyangan terus-menerus: cukup menarik mata tanpa
     // berubah menjadi gangguan selama pengguna sedang berjalan.
-    val shake by rememberInfiniteTransition(label = "getar-ikon").animateFloat(
+    val attentionTransition = rememberInfiniteTransition(label = "perhatian-ikon")
+    val shake by attentionTransition.animateFloat(
         initialValue = 0f,
         targetValue = 0f,
         animationSpec = infiniteRepeatable(
@@ -254,12 +256,25 @@ internal fun StatusCircle(
         ),
         label = "sudut-getar",
     )
+    val blinkAlpha by attentionTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 460, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "kedip-merah",
+    )
     Box(modifier = modifier.size(48.dp)) {
         Surface(
             color = Color.White,
             shape = CircleShape,
             shadowElevation = 4.dp,
-            border = if (selected) BorderStroke(2.dp, SiagaNavy) else null,
+            border = when {
+                selected -> BorderStroke(2.dp, SiagaNavy)
+                needsAttention -> BorderStroke(2.dp, BMKG_UNREAD_COLOR.copy(alpha = blinkAlpha))
+                else -> null
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .clip(CircleShape)
@@ -273,11 +288,14 @@ internal fun StatusCircle(
                     tint = tint,
                     modifier = Modifier
                         .size(24.dp)
-                        .graphicsLayer(rotationZ = if (needsAttention) shake else 0f),
+                        .graphicsLayer(
+                            rotationZ = if (needsAttention) shake else 0f,
+                            alpha = if (needsAttention) blinkAlpha else 1f,
+                        ),
                 )
             }
         }
-        if (hasProblem) {
+        if (hasProblem || needsAttention) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)

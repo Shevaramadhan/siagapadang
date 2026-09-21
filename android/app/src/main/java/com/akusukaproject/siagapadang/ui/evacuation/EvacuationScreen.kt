@@ -116,6 +116,7 @@ import com.akusukaproject.siagapadang.data.model.EvacuationRoute
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
 import com.akusukaproject.siagapadang.data.model.InundationZoneStatus
 import com.akusukaproject.siagapadang.domain.EarthquakeRelevance
+import com.akusukaproject.siagapadang.domain.EarthquakeAgeFormatter
 import com.akusukaproject.siagapadang.domain.ManeuverGuidance
 import com.akusukaproject.siagapadang.domain.ManeuverType
 import com.akusukaproject.siagapadang.domain.BearingCalculator
@@ -869,6 +870,7 @@ private fun BmkgTsunamiAlertDialog(
     status: BmkgStatus,
     onContinueEvacuation: () -> Unit,
 ) {
+    val ageLabel = rememberBmkgAgeLabel(status)
     Dialog(
         onDismissRequest = {},
         properties = DialogProperties(
@@ -912,7 +914,14 @@ private fun BmkgTsunamiAlertDialog(
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        text = "${status.eventDate} ${status.eventTime}\n${status.region}".trim(),
+                        text = listOfNotNull(
+                            ageLabel,
+                            listOf(status.eventDate, status.eventTime)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" ")
+                                .takeIf { it.isNotBlank() },
+                            status.region.takeIf { it.isNotBlank() },
+                        ).joinToString("\n"),
                         fontSize = 18.sp,
                         lineHeight = 25.sp,
                         textAlign = TextAlign.Center,
@@ -1205,6 +1214,7 @@ private fun BmkgDetailBody(
     status: BmkgStatus,
     currentLocation: GeoCoordinate?,
 ) {
+    val ageLabel = rememberBmkgAgeLabel(status)
     val distanceKm = EarthquakeRelevance.distanceKm(status.epicenter, currentLocation)
     val distanceLabel = EarthquakeRelevance.distanceLabel(
         distanceKm = distanceKm,
@@ -1254,6 +1264,7 @@ private fun BmkgDetailBody(
         val timestamp = listOf(status.eventDate, status.eventTime).filter { it.isNotBlank() }.joinToString(" ")
         Text(
             text = listOfNotNull(
+                ageLabel,
                 timestamp.takeIf { it.isNotBlank() },
                 if (status.isStale) "Tersimpan, belum diperbarui" else null,
                 "Sumber: BMKG",
@@ -1276,6 +1287,7 @@ private fun FarAwayBmkgBody(
     status: BmkgStatus,
     distanceLabel: String?,
 ) {
+    val ageLabel = rememberBmkgAgeLabel(status)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "Gempa terbaru yang dilaporkan BMKG berada jauh dari Sumatera Barat.",
@@ -1304,6 +1316,7 @@ private fun FarAwayBmkgBody(
         )
         Text(
             text = listOfNotNull(
+                ageLabel,
                 listOf(status.eventDate, status.eventTime)
                     .filter { it.isNotBlank() }
                     .joinToString(" ")
@@ -1314,6 +1327,27 @@ private fun FarAwayBmkgBody(
             fontSize = 11.sp,
             lineHeight = 15.sp,
             fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun rememberBmkgAgeLabel(status: BmkgStatus): String? {
+    var nowMillis by remember(status.isoDateTime, status.eventDate, status.eventTime) {
+        mutableStateOf(System.currentTimeMillis())
+    }
+    LaunchedEffect(status.isoDateTime, status.eventDate, status.eventTime) {
+        while (true) {
+            delay(60_000L)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+    return remember(status.isoDateTime, status.eventDate, status.eventTime, nowMillis) {
+        EarthquakeAgeFormatter.relativeAge(
+            isoDateTime = status.isoDateTime,
+            eventDate = status.eventDate,
+            eventTime = status.eventTime,
+            nowMillis = nowMillis,
         )
     }
 }
@@ -1378,6 +1412,11 @@ private fun StatusDetailCard(
     modifier: Modifier = Modifier,
     caretEndOffset: Dp? = null,
 ) {
+    val bmkgAgeLabel = if (state.bmkgStatus != null) {
+        rememberBmkgAgeLabel(state.bmkgStatus)
+    } else {
+        null
+    }
     val title: String
     val message: String
     val color: Color
@@ -1421,6 +1460,7 @@ private fun StatusDetailCard(
                     val distanceKm = EarthquakeRelevance.distanceKm(bmkg.epicenter, state.currentLocation)
                     val isFarAway = distanceKm != null && distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
                     listOfNotNull(
+                        bmkgAgeLabel,
                         bmkg.region.takeIf { it.isNotBlank() },
                         EarthquakeRelevance.distanceLabel(
                             distanceKm = distanceKm,
@@ -2216,7 +2256,7 @@ private fun EvacuationMapPanel(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
+                    .padding(start = 16.dp, end = 88.dp, bottom = 148.dp)
                     .zIndex(8f),
             ) {
                 if (routeChangeNotice != null) {
@@ -2314,11 +2354,11 @@ private fun EvacuationMapPanel(
                     .padding(
                         end = 16.dp,
                         bottom = if (state.isOutsideInundationZoneAtStart) {
-                            16.dp
+                            28.dp
                         } else if (bottomActionHeightPx > 0) {
-                            with(LocalDensity.current) { bottomActionHeightPx.toDp() } + 12.dp
+                            with(LocalDensity.current) { bottomActionHeightPx.toDp() } + 24.dp
                         } else {
-                            96.dp
+                            108.dp
                         },
                     )
                     .zIndex(9f),
@@ -2451,13 +2491,15 @@ private fun ZoneStatusPill(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val appearance = zoneStatusAppearance(status)
-    // Padding berada di dalam area clickable, sehingga pil tetap ramping tetapi sasaran
-    // sentuhnya memenuhi 48 dp (NF-06).
-    Box(
+    Surface(
+        color = Color.White,
+        contentColor = SiagaNavy,
+        shape = if (expanded) RoundedCornerShape(18.dp) else CircleShape,
+        shadowElevation = 6.dp,
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(if (expanded) RoundedCornerShape(18.dp) else CircleShape)
             .clickable(role = Role.Button) { expanded = !expanded }
-            .padding(vertical = 6.dp)
+            .animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS))
             .semantics {
                 contentDescription = if (expanded) {
                     "Ciutkan keterangan warna zona"
@@ -2466,41 +2508,43 @@ private fun ZoneStatusPill(
                 }
             },
     ) {
-    Surface(
-        color = Color.White,
-        contentColor = SiagaNavy,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = 6.dp,
-        modifier = Modifier.animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS)),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(appearance.dotColor),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = appearance.label,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                Spacer(Modifier.width(6.dp))
+        if (!expanded) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
                 Icon(
-                    painterResource(if (expanded) R.drawable.ic_ms_expand_more else R.drawable.ic_ms_expand_less),
+                    painterResource(R.drawable.ic_ms_warning),
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    tint = appearance.dotColor,
+                    modifier = Modifier.size(26.dp),
                 )
             }
-            if (expanded) {
+        } else {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(appearance.dotColor),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = appearance.label,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        painterResource(R.drawable.ic_ms_expand_more),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
                 Text(
                     text = "Warna pada peta",
                     fontSize = 12.sp,
@@ -2510,7 +2554,6 @@ private fun ZoneStatusPill(
                 ZoneLegendEntry.entries.forEach { legend -> ZoneLegendItem(legend) }
             }
         }
-    }
     }
 }
 

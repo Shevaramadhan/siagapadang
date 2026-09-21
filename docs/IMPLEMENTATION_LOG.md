@@ -230,3 +230,22 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Unit test Android: 134 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
 - Popup pemeriksaan serta orientasi terakhir pada peta kecil dan besar sudah diperiksa langsung. State
   orientasi dipicu dengan menghabiskan tiga rute sebelumnya; teks, ikon, dan kontrol tidak terpotong.
+
+## 21 September 2026 — Kontrol Peta dan Umur Informasi BMKG
+
+- Branch: `fix/map-controls-bmkg-age`; belum di-push.
+- Tombol pusatkan dinaikkan 12 dp agar tidak terlalu dekat dengan kontrol bawah.
+- Pil rute sebelumnya ditempatkan di atas indikator zona sehingga tidak lagi menutup status bahaya
+  rendah. Indikator zona pada peta besar sekarang berupa tombol ikon 48 dp dan tetap dapat diketuk
+  untuk membuka nama status serta legenda lengkap.
+- Ikon toa BMKG yang belum dibaca tetap merah, kini berkedip, memiliki garis merah berkedip, dan
+  selalu menampilkan titik merah agar statusnya terlihat pada setiap fase animasi.
+- Respons `datetime` utama BMKG sekarang ikut dibaca Android. Kartu info dan dialog tsunami
+  menampilkan umur kejadian seperti **17 menit lalu** atau **3 jam lalu**, diperbarui setiap menit.
+- Audit notifikasi Android: aplikasi belum memiliki notification channel, izin `POST_NOTIFICATIONS`,
+  worker/push receiver, atau pengiriman notifikasi ke status bar. Yang tersedia saat ini adalah
+  indikator di dalam aplikasi, dialog layar penuh untuk potensi tsunami yang relevan, dan widget.
+- Potensi tsunami sudah dibedakan: kejadian baru dalam radius relevansi 1.500 km memicu dialog layar
+  penuh; kejadian yang jauh tetap dijelaskan pada kartu BMKG tanpa mengambil alih layar.
+- Unit test Android: 138 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+  Validasi visual perangkat belum selesai karena layar perangkat terkunci saat pemeriksaan terakhir.
