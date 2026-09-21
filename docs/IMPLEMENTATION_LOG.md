@@ -196,3 +196,12 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Siklus Perbesar → Perkecil lulus melalui area tombol yang dilaporkan UI perangkat dan tidak ada crash.
   Status luar zona tidak dapat dipicu ulang pada sesi validasi akhir karena akurasi GPS sekitar 46,6 m,
   sedangkan pemeriksaan awal mensyaratkan maksimal 35 m.
+
+## 21 September 2026 — Posisi Pil Status Luar Zona
+
+- Branch: `fix/outside-zone-pill-position`; belum di-push.
+- Pada peta kecil, pil **Di luar zona** dipindahkan dari tengah sisi kiri ke kiri bawah, tepat di atas
+  tombol **Periksa posisi lagi**. Posisi status lain tetap seperti sebelumnya.
+- Unit test Android: 130 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+- Validasi langsung pada keadaan luar zona menunjukkan pil dan tombol sejajar pada sisi kiri, memiliki
+  jarak vertikal 49 piksel, dan tidak bertabrakan dengan tombol pusatkan peta di sisi kanan.

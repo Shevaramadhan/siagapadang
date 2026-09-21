@@ -2088,10 +2088,17 @@ private fun EvacuationMapPanel(
                 CompactZoneStatusPill(
                     status = state.currentZoneStatus,
                     onClick = onExpandMap,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 8.dp)
-                        .zIndex(8f),
+                    modifier = if (state.isOutsideInundationZoneAtStart) {
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 16.dp, bottom = 84.dp)
+                            .zIndex(8f)
+                    } else {
+                        Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 8.dp)
+                            .zIndex(8f)
+                    },
                 )
             } else {
                 ZoneStatusPill(
