@@ -644,11 +644,7 @@ internal fun MapOpenHandle(
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
-            .anchoredDraggable(state = dragState, orientation = Orientation.Vertical)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics {
-                contentDescription = if (expansionProgress > 0.5f) "Kecilkan peta" else "Perbesar peta"
-            },
+            .anchoredDraggable(state = dragState, orientation = Orientation.Vertical),
     ) {
         // Tetap di tengah tepi peta seperti gagang sebelumnya, tetapi kini bertuliskan
         // tindakannya. Hanya teksnya yang berganti, tidak ada tombol kedua yang menimpa.
@@ -657,7 +653,16 @@ internal fun MapOpenHandle(
             contentColor = SiagaNavy,
             shape = RoundedCornerShape(20.dp),
             shadowElevation = 6.dp,
-            modifier = Modifier.height(40.dp),
+            modifier = Modifier
+                .height(40.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics {
+                    contentDescription = if (expansionProgress > 0.5f) {
+                        "Kecilkan peta"
+                    } else {
+                        "Perbesar peta"
+                    }
+                },
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

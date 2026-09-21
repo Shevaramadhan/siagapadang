@@ -2734,7 +2734,8 @@ private fun ExpandedOutsideZoneHeader(
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .width(195.dp)
+                    .offset(x = (-30).dp)
+                    .width(225.dp)
                     .height(EXPANDED_HEADER_HEIGHT),
             )
             Image(
@@ -2743,7 +2744,8 @@ private fun ExpandedOutsideZoneHeader(
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .width(220.dp)
+                    .offset(x = 30.dp)
+                    .width(250.dp)
                     .height(EXPANDED_HEADER_HEIGHT),
             )
             Column(

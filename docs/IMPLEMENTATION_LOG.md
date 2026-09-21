@@ -185,3 +185,14 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Pengujian Infinix X6855 lulus: sentuhan pada judul membuka aplikasi, status berubah otomatis dari
   “Lokasi belum terbaca” menjadi “Lokasi di luar zona rendaman” setelah GPS aplikasi memperoleh lokasi,
   dan judul serta rincian tampil penuh tanpa elipsis. Tidak ditemukan crash pada log perangkat.
+## 21 September 2026 — Tombol Peta dan Sudut Header Luar Zona
+
+- Branch: `fix/outside-zone-map-toggle`; belum di-push.
+- Klik tombol **Perbesar peta** dan **Perkecil peta** dipisahkan dari pengenal gerakan tarik. Gerakan
+  kecil jari tidak lagi membuat klik pada tombol terlihat batal, sementara peta masih dapat ditarik.
+- Ilustrasi header peta besar pada keadaan luar zona diperlebar dan digeser melewati batas kiri/kanan.
+  Sudut putih yang menjadi bagian dari gambar widget tidak lagi masuk ke area header.
+- Unit test Android: 130 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+- Siklus Perbesar → Perkecil lulus melalui area tombol yang dilaporkan UI perangkat dan tidak ada crash.
+  Status luar zona tidak dapat dipicu ulang pada sesi validasi akhir karena akurasi GPS sekitar 46,6 m,
+  sedangkan pemeriksaan awal mensyaratkan maksimal 35 m.
