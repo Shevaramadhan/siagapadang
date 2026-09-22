@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -236,7 +237,8 @@ internal fun StatusCircle(
 ) {
     // Getaran pendek berulang, bukan goyangan terus-menerus: cukup menarik mata tanpa
     // berubah menjadi gangguan selama pengguna sedang berjalan.
-    val shake by rememberInfiniteTransition(label = "getar-ikon").animateFloat(
+    val attentionTransition = rememberInfiniteTransition(label = "perhatian-ikon")
+    val shake by attentionTransition.animateFloat(
         initialValue = 0f,
         targetValue = 0f,
         animationSpec = infiniteRepeatable(
@@ -254,12 +256,25 @@ internal fun StatusCircle(
         ),
         label = "sudut-getar",
     )
+    val blinkAlpha by attentionTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 460, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "kedip-merah",
+    )
     Box(modifier = modifier.size(48.dp)) {
         Surface(
             color = Color.White,
             shape = CircleShape,
             shadowElevation = 4.dp,
-            border = if (selected) BorderStroke(2.dp, SiagaNavy) else null,
+            border = when {
+                selected -> BorderStroke(2.dp, SiagaNavy)
+                needsAttention -> BorderStroke(2.dp, BMKG_UNREAD_COLOR.copy(alpha = blinkAlpha))
+                else -> null
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .clip(CircleShape)
@@ -273,11 +288,14 @@ internal fun StatusCircle(
                     tint = tint,
                     modifier = Modifier
                         .size(24.dp)
-                        .graphicsLayer(rotationZ = if (needsAttention) shake else 0f),
+                        .graphicsLayer(
+                            rotationZ = if (needsAttention) shake else 0f,
+                            alpha = if (needsAttention) blinkAlpha else 1f,
+                        ),
                 )
             }
         }
-        if (hasProblem) {
+        if (hasProblem || needsAttention) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -644,11 +662,7 @@ internal fun MapOpenHandle(
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
-            .anchoredDraggable(state = dragState, orientation = Orientation.Vertical)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics {
-                contentDescription = if (expansionProgress > 0.5f) "Kecilkan peta" else "Perbesar peta"
-            },
+            .anchoredDraggable(state = dragState, orientation = Orientation.Vertical),
     ) {
         // Tetap di tengah tepi peta seperti gagang sebelumnya, tetapi kini bertuliskan
         // tindakannya. Hanya teksnya yang berganti, tidak ada tombol kedua yang menimpa.
@@ -657,7 +671,16 @@ internal fun MapOpenHandle(
             contentColor = SiagaNavy,
             shape = RoundedCornerShape(20.dp),
             shadowElevation = 6.dp,
-            modifier = Modifier.height(40.dp),
+            modifier = Modifier
+                .height(40.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics {
+                    contentDescription = if (expansionProgress > 0.5f) {
+                        "Kecilkan peta"
+                    } else {
+                        "Perbesar peta"
+                    }
+                },
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

@@ -158,3 +158,139 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Unit test Android: 130 lulus, 0 gagal.
 - Pemeriksaan Infinix X6855 lulus: zona, TES, dan TEA dapat dimatikan secara terpisah; siklus zona
   mati lalu hidup kembali memulihkan poligon dan garis batas.
+
+## 21 September 2026 — Tampilan Widget untuk Posisi di Luar Zona Rendaman
+
+- Branch: `feat/outside-zone-widget-design`; belum di-push.
+- Kartu posisi awal di luar zona pada layar evakuasi memakai desain yang sama dengan widget:
+  latar biru langit, ilustrasi pegunungan, karakter, dan arahan singkat untuk menjauhi pantai serta
+  sungai.
+- Header pada mode peta besar memakai ilustrasi dan susunan informasi yang sama. Pesan hasil
+  pemeriksaan ulang tetap ditampilkan pada header tanpa mengembalikan kontrol rute atau hitung mundur.
+- Tombol **Periksa posisi lagi** dipadatkan dan ditempatkan di kiri bawah. Tombol pusatkan peta berada
+  di kanan bawah sehingga kedua tombol tidak saling menutupi.
+- Unit test Android: 130 lulus, 0 gagal.
+- APK ARM64 dipasang pada Infinix X6855. Tampilan peta kecil, peta besar, serta hasil pemeriksaan ulang
+  diperiksa langsung; ilustrasi dan teks terbaca, dan kedua tombol memiliki jarak yang cukup.
+## 21 September 2026 — Pembaruan Otomatis dan Interaksi Widget
+
+- Branch: `feat/widget-auto-refresh`; belum di-push.
+- Lokasi yang diterima layar evakuasi sekarang langsung dikirim ke widget lebar dan ringkas. Frekuensi
+  pembaruan dibatasi paling sering setiap 15 detik agar aliran GPS tidak membuka database setiap detik.
+- Kedua widget juga meminta pembaruan berkala sistem setiap 30 menit ketika aplikasi tidak aktif.
+- Seluruh permukaan kartu widget membuka aplikasi. Tombol tindakan tetap membuka tujuan yang sama.
+- Judul dan rincian status memakai maksimal dua baris; ukuran teks dan posisi informasi rute disesuaikan
+  agar kalimat tidak dipotong atau bertumpuk pada widget 2 × 2 maupun 4 × 2.
+- Unit test Android: 130 lulus, 0 gagal.
+- Pengujian Infinix X6855 lulus: sentuhan pada judul membuka aplikasi, status berubah otomatis dari
+  “Lokasi belum terbaca” menjadi “Lokasi di luar zona rendaman” setelah GPS aplikasi memperoleh lokasi,
+  dan judul serta rincian tampil penuh tanpa elipsis. Tidak ditemukan crash pada log perangkat.
+## 21 September 2026 — Tombol Peta dan Sudut Header Luar Zona
+
+- Branch: `fix/outside-zone-map-toggle`; belum di-push.
+- Klik tombol **Perbesar peta** dan **Perkecil peta** dipisahkan dari pengenal gerakan tarik. Gerakan
+  kecil jari tidak lagi membuat klik pada tombol terlihat batal, sementara peta masih dapat ditarik.
+- Ilustrasi header peta besar pada keadaan luar zona diperlebar dan digeser melewati batas kiri/kanan.
+  Sudut putih yang menjadi bagian dari gambar widget tidak lagi masuk ke area header.
+- Unit test Android: 130 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+- Siklus Perbesar → Perkecil lulus melalui area tombol yang dilaporkan UI perangkat dan tidak ada crash.
+  Status luar zona tidak dapat dipicu ulang pada sesi validasi akhir karena akurasi GPS sekitar 46,6 m,
+  sedangkan pemeriksaan awal mensyaratkan maksimal 35 m.
+
+## 21 September 2026 — Posisi Pil Status Luar Zona
+
+- Branch: `fix/outside-zone-pill-position`; belum di-push.
+- Pada peta kecil, pil **Di luar zona** dipindahkan dari tengah sisi kiri ke kiri bawah, tepat di atas
+  tombol **Periksa posisi lagi**. Posisi status lain tetap seperti sebelumnya.
+- Unit test Android: 130 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+- Validasi langsung pada keadaan luar zona menunjukkan pil dan tombol sejajar pada sisi kiri, memiliki
+  jarak vertikal 49 piksel, dan tidak bertabrakan dengan tombol pusatkan peta di sisi kanan.
+
+## 21 September 2026 — Pemeriksaan Zona Sebelum Menampilkan Rute
+
+- Branch: `fix/initial-zone-before-route`; belum di-push.
+- Jika pembacaan awal berada di luar zona tetapi akurasi GPS masih di atas 35 meter, aplikasi kini
+  menahan pembuatan rute dan menampilkan **Menunggu GPS lebih akurat…**.
+- Rute baru disiapkan setelah posisi terbaca di dalam zona. Jika data zona tidak tersedia, rute tetap
+  disiapkan sebagai arahan keselamatan cadangan.
+- Unit test Android: 134 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+- Enam sampel keadaan layar setelah aplikasi dimulai ulang menunjukkan urutan **Menunggu GPS lebih
+  akurat** lalu **Anda berada di luar zona rendaman** tanpa kartu atau teks rute muncul di antaranya.
+
+## 21 September 2026 — Popup Pemeriksaan, Ilustrasi, dan Orientasi Terakhir
+
+- Branch: `fix/outside-zone-popup-artwork`; belum di-push.
+- Hasil tombol **Periksa posisi lagi** kini muncul sebagai popup di tengah layar, dapat ditutup, dan
+  hilang otomatis setelah empat detik. Pesan hasil tidak lagi mengganti keterangan pada kartu aman.
+- Ilustrasi luar zona pada kartu kecil sekarang memenuhi tinggi kartu dengan crop terarah. Pada header
+  peta besar, rasio asli aset dipertahankan agar karakter dan latar tidak terlihat gepeng.
+- Halaman **Orientasi terakhir** memakai kartu putih lebar, panel arah biru, bagian tujuan yang jelas,
+  serta kartu peringatan terpisah. Mode peta besar kini memiliki header orientasi dengan arah, jarak,
+  dan nama tujuan.
+- Unit test Android: 134 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+- Popup pemeriksaan serta orientasi terakhir pada peta kecil dan besar sudah diperiksa langsung. State
+  orientasi dipicu dengan menghabiskan tiga rute sebelumnya; teks, ikon, dan kontrol tidak terpotong.
+
+## 21 September 2026 — Kontrol Peta dan Umur Informasi BMKG
+
+- Branch: `fix/map-controls-bmkg-age`; belum di-push.
+- Tombol pusatkan dinaikkan 12 dp agar tidak terlalu dekat dengan kontrol bawah.
+- Pil rute sebelumnya ditempatkan di atas indikator zona sehingga tidak lagi menutup status bahaya
+  rendah. Indikator zona pada peta besar sekarang berupa tombol ikon 48 dp dan tetap dapat diketuk
+  untuk membuka nama status serta legenda lengkap.
+- Ikon toa BMKG yang belum dibaca tetap merah, kini berkedip, memiliki garis merah berkedip, dan
+  selalu menampilkan titik merah agar statusnya terlihat pada setiap fase animasi.
+- Respons `datetime` utama BMKG sekarang ikut dibaca Android. Kartu info dan dialog tsunami
+  menampilkan umur kejadian seperti **17 menit lalu** atau **3 jam lalu**, diperbarui setiap menit.
+- Audit notifikasi Android: aplikasi belum memiliki notification channel, izin `POST_NOTIFICATIONS`,
+  worker/push receiver, atau pengiriman notifikasi ke status bar. Yang tersedia saat ini adalah
+  indikator di dalam aplikasi, dialog layar penuh untuk potensi tsunami yang relevan, dan widget.
+- Potensi tsunami sudah dibedakan: kejadian baru dalam radius relevansi 1.500 km memicu dialog layar
+  penuh; kejadian yang jauh tetap dijelaskan pada kartu BMKG tanpa mengambil alih layar.
+- Unit test Android: 138 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
+  Validasi visual perangkat belum selesai karena layar perangkat terkunci saat pemeriksaan terakhir.
+
+## 22 September 2026 — Ukuran Ikon Launcher
+
+- Branch: `fix/smaller-launcher-icon`; belum di-push.
+- Ruang tepi adaptive icon ditambah dari 12 dp menjadi 20 dp. Logo yang terlihat pada home screen
+  menjadi lebih kecil dan tidak memenuhi bidang ikon, sedangkan ukuran area sentuh launcher tetap
+  mengikuti standar Android.
+- Perubahan hanya berlaku pada ikon launcher; ukuran logo splash screen tidak berubah.
+- APK debug berhasil dibangun dan dipasang pada Infinix X6855. Ikon diperiksa melalui hasil pencarian
+  app drawer: logo memiliki ruang tepi yang jelas, tidak terpotong, dan label aplikasi tetap utuh.
+
+## 22 September 2026 — Kontrol Zona, Riwayat Rute, dan Kartu Tujuan
+
+- Branch: `feat/route-history-map-polish`; belum di-push.
+- Tombol status zona pada peta kecil kini berupa ikon bulat 48 dp, sama dengan tombol pusatkan. Nama
+  zona tetap tersedia lewat deskripsi aksesibilitas dan legenda lengkap pada mode peta besar.
+- Daftar **Rute sebelumnya** kini interaktif. Memilih tujuan lama menghitung ulang rute dari posisi
+  pengguna terbaru, memindahkan rute aktif ke daftar, dan memungkinkan pengguna kembali lagi ke
+  alternatif tanpa memakai garis lama yang sudah tertinggal.
+- Daftar rute lama dibatasi lebarnya agar tidak bertabrakan dengan gelembung tombol pusatkan. Teks
+  tombol pusatkan dipadatkan dari **Kembali ke titik Anda** menjadi **Ke posisi Anda**.
+- Kartu nama, jarak, dan waktu tujuan dipisahkan dari pin tujuan. Kartu memakai susunan lebih ringkas
+  dan berpindah tegak lurus terhadap ruas terakhir ketika arah/rotasi peta berubah, sehingga garis
+  jalan menuju tujuan tetap terlihat.
+- Status pengiriman laporan hambatan, termasuk penolakan posko, sekarang muncul sebagai dialog tengah
+  bergaya V3 dengan keadaan diproses, diterima, disimpan, atau belum diterima; banner lama dihapus.
+- Audit keadaan darurat: backend menganggap darurat hanya ketika ada `EmergencyEvent` nyata berstatus
+  `ACTIVE`. Android sudah memiliki `getActiveEvent()`, tetapi belum memanggilnya dan belum mengubah UI
+  berdasarkan event backend. Potensi tsunami BMKG saat ini hanya memerahkan indikator serta membuka
+  dialog layar penuh bila kejadian baru dan relevan; status itu tidak otomatis mengaktifkan event backend.
+- Unit test Android: 140 lulus, 0 gagal. APK ARM64 dipasang pada Infinix X6855. Pemilihan TEA → TES →
+  TEA berhasil; tujuan yang ditinggalkan berganti di daftar rute lama, dan daftar tidak menutupi tombol
+  pusatkan. Kartu tujuan serta garis rute diperiksa pada mode peta besar.
+
+## 22 September 2026 — Penyelarasan Kontrol dan Panel Peta
+
+- Branch: `feat/route-history-map-polish`; belum di-push.
+- Tombol zona dan tombol pusatkan memakai acuan bawah yang sama. Pada Infinix X6855 keduanya terukur
+  tepat sejajar pada koordinat vertikal `2006–2138` piksel.
+- Sasaran ketuk **Rute sebelumnya** kini tetap pada posisi yang sama ketika panel dibuka. Empat kali
+  buka-tutup berturut-turut pada koordinat yang sama berhasil tanpa ketukan terlewat.
+- Ketika legenda zona dibuka, panel rute sebelumnya bergeser mengikuti tinggi legenda. Validasi pada
+  perangkat menunjukkan jarak 66 piksel (sekitar 24 dp) sehingga kedua panel tidak saling menutupi.
+- Sebanyak 140 unit test lulus, APK ARM64 berhasil dibangun, dan versi terbaru dipasang pada Infinix
+  X6855.

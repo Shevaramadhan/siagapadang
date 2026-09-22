@@ -194,6 +194,15 @@ Galat yang sudah pernah ditemukan **hanya karena diuji di perangkat**, bukan lew
 
 - **Perilaku saat hitung mundur habis.** Sekarang tidak terjadi apa-apa: `startCountdown()` berhenti di `00:00` lalu perulangannya putus. Arahan "terus berjalan" menjadi keliru pada titik itu. Kalimat penggantinya arahan keselamatan, jadi harus divalidasi BPBD (Q-03).
 - **P1-09 posisi awal di luar zona rendaman sudah dikerjakan di branch `feat/p1-outside-zone-start`.** Pemeriksaan zona lokal kini mendahului rute dan hitung mundur. Posisi luar zona dengan akurasi GPS maksimal 35 meter menampilkan layar khusus serta tombol pemeriksaan ulang; GPS lemah atau data zona tidak tersedia tetap memakai arahan evakuasi sebagai fallback. Unit test dan uji Infinix X6855 lulus. Branch belum di-push atas arahan pengguna.
+- **Tampilan lanjutan P1-09 dikerjakan di branch `feat/outside-zone-widget-design`.** Kartu layar evakuasi dan header peta besar kini mengikuti desain widget dengan ilustrasi gunung serta karakter. Tombol **Periksa posisi lagi** dibuat ringkas di kiri bawah dan tombol pusatkan tetap di kanan bawah. Sebanyak 130 unit test lulus dan tampilan peta kecil, peta besar, serta hasil pemeriksaan ulang sudah diuji pada Infinix X6855. Branch belum di-push.
+- **Widget diperbaiki di branch `feat/widget-auto-refresh`.** Pembacaan lokasi aplikasi memperbarui kedua ukuran widget paling sering setiap 15 detik, dengan pembaruan sistem 30 menit sebagai cadangan. Seluruh kartu membuka aplikasi dan teks status dapat memakai dua baris. Sebanyak 130 unit test serta alur lokasi belum terbaca ke luar zona lulus pada Infinix X6855. Branch belum di-push.
+- **Kontrol peta luar zona diperbaiki di branch `fix/outside-zone-map-toggle`.** Area klik Perbesar/Perkecil dipisahkan dari pengenal drag agar sedikit gerakan jari tidak membatalkan klik. Bagian putih bawaan ilustrasi header digeser keluar layar. Sebanyak 130 unit test lulus dan siklus buka-tutup peta berhasil pada Infinix X6855. Branch belum di-push.
+- **Posisi pil luar zona dirapikan di branch `fix/outside-zone-pill-position`.** Pada peta kecil, pil kini sejajar di kiri dan berada tepat di atas tombol **Periksa posisi lagi**; status zona lain tidak berubah. Sebanyak 130 unit test lulus dan posisi baru sudah divalidasi langsung pada Infinix X6855. Branch belum di-push.
+- **Kilatan rute sebelum status luar zona diperbaiki di branch `fix/initial-zone-before-route`.** Jika data lokal menunjukkan posisi di luar zona tetapi GPS awal masih lemah, aplikasi menunggu pembacaan maksimal 35 meter sebelum membuat rute. Uji mulai ulang pada Infinix X6855 menunjukkan transisi dari **Menunggu GPS lebih akurat** langsung ke status luar zona tanpa rute muncul. Sebanyak 134 unit test lulus. Branch belum di-push.
+- **Popup pemeriksaan, ilustrasi luar zona, dan orientasi terakhir diperbarui di branch `fix/outside-zone-popup-artwork`.** Hasil pemeriksaan posisi muncul sebagai popup tengah selama empat detik; ilustrasi kecil memenuhi kartu dan header besar mempertahankan rasio aset. Kartu serta header **Orientasi terakhir** diselaraskan dengan desain V3 dan divalidasi langsung setelah tiga rute sebelumnya dihabiskan. Sebanyak 134 unit test lulus dan APK terpasang pada Infinix X6855. Branch belum di-push.
+- **Kontrol peta dan informasi BMKG diperbarui di branch `fix/map-controls-bmkg-age`.** Tombol pusatkan dinaikkan, daftar rute lama tidak lagi bertumpuk dengan status zona, dan status zona peta besar dipadatkan menjadi ikon yang membuka legenda saat diketuk. Ikon BMKG belum dibaca berkedip merah dengan titik merah tetap. Umur kejadian kini memakai `datetime` BMKG dan tampil dalam menit/jam. Sebanyak 138 unit test lulus dan APK terpasang pada Infinix X6855; validasi visual tertunda karena layar perangkat terkunci. Branch belum di-push.
+- **Notifikasi sistem Android untuk BMKG belum ada.** Belum tersedia notification channel, izin Android 13+, maupun worker/push receiver. Saat ini peringatan hanya tampil di dalam aplikasi; potensi tsunami yang masih baru dan berada dalam radius relevansi 1.500 km membuka dialog layar penuh. Tentukan aturan pengulangan, pembatalan, dan sumber pemicu sebelum menambahkan notifikasi latar belakang agar satu kejadian tidak dikirim berulang.
+- **Ikon launcher diperkecil di branch `fix/smaller-launcher-icon`.** Inset foreground adaptive icon dinaikkan dari 12 dp menjadi 20 dp agar logo memiliki ruang tepi lebih lega pada home screen. Splash screen tidak diubah. APK terpasang dan ikon sudah diperiksa di app drawer Infinix X6855. Branch belum di-push.
 - **Pemberitahuan bila pengguna mengikuti rute lama** setelah berpindah ke alternatif tujuan.
 - Uji lapangan pengalihan keluar jalur.
 - Bersihkan composable lama yang tidak terpakai di `EvacuationScreen.kt` (berkas sudah di atas 3.500 baris).
@@ -283,3 +292,19 @@ Isi perubahannya sendiri berguna — dialog konfirmasi check-in dan pembacaan ru
 
 **Pelajaran untuk penerus:** setelah `git pull`, jalankan `:android:app:testDebugUnitTest` sebelum melanjutkan. Rebase yang bersih tidak berarti kodenya masih dapat dikompilasi.
 
+- **Kontrol zona, riwayat rute, dan kartu tujuan diperbarui di branch `feat/route-history-map-polish`.**
+  Tombol zona peta kecil sekarang ikon 48 dp. Rute sebelumnya dapat dipilih kembali dan dihitung ulang
+  dari posisi terbaru; rute aktif berpindah ke daftar sehingga pengguna bisa kembali ke alternatif.
+  Kartu tujuan dipisahkan dari pin dan bergeser menjauhi ruas terakhir. Popup hasil laporan hambatan
+  sudah mengikuti desain V3. Sebanyak 140 unit test lulus dan alur TEA → TES → TEA diuji pada Infinix
+  X6855. Branch belum di-push.
+- **Integrasi status emergency backend masih terbuka.** Sumber resmi backend adalah `EmergencyEvent`
+  nyata berstatus `ACTIVE`; `EmergencyApiClient.getActiveEvent()` sudah ada, tetapi belum dipakai oleh
+  ViewModel/UI. Status potensi tsunami BMKG saat ini hanya memicu indikator merah/dialog relevansi dan
+  tidak otomatis mengaktifkan emergency backend. Putuskan pemetaan state, frekuensi polling/push, dan
+  perubahan UI sebelum implementasi.
+- **Kontrol peta lanjutan di branch `feat/route-history-map-polish`.** Tombol zona dan pusatkan sekarang
+  tepat sejajar. Sasaran ketuk panel **Rute sebelumnya** tidak berpindah saat dibuka sehingga panel dapat
+  ditutup dengan ketukan kedua. Saat legenda zona dibuka, panel riwayat bergeser ke atas mengikuti tinggi
+  legenda dan menyisakan jarak sekitar 24 dp. Sebanyak 140 unit test lulus dan APK sudah dipasang serta
+  diperiksa pada Infinix X6855. Branch belum di-push.

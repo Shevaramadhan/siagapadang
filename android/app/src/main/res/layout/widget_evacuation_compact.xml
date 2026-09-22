@@ -108,12 +108,12 @@
         android:layout_gravity="start|top"
         android:layout_marginStart="7dp"
         android:layout_marginTop="9dp"
-        android:ellipsize="end"
         android:fontFamily="sans-serif-black"
-        android:maxLines="1"
+        android:includeFontPadding="false"
+        android:maxLines="2"
         android:text="@string/widget_location_unreadable"
         android:textColor="@android:color/white"
-        android:textSize="14sp" />
+        android:textSize="13sp" />
 
     <TextView
         android:id="@+id/widget_zone_detail"
@@ -121,13 +121,13 @@
         android:layout_height="wrap_content"
         android:layout_gravity="start|top"
         android:layout_marginStart="7dp"
-        android:layout_marginTop="31dp"
-        android:ellipsize="end"
+        android:layout_marginTop="43dp"
         android:fontFamily="sans-serif-medium"
-        android:maxLines="1"
+        android:includeFontPadding="false"
+        android:maxLines="2"
         android:text="@string/widget_enable_location_permission"
         android:textColor="@android:color/white"
-        android:textSize="9sp" />
+        android:textSize="8sp" />
 
     <ImageView
         android:id="@+id/widget_route_icon"
@@ -135,7 +135,7 @@
         android:layout_height="17dp"
         android:layout_gravity="start|top"
         android:layout_marginStart="12dp"
-        android:layout_marginTop="51dp"
+        android:layout_marginTop="68dp"
         android:contentDescription="@null"
         android:importantForAccessibility="no"
         android:src="@drawable/figma_widget_danger_turn_icon"
@@ -147,7 +147,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="start|top"
         android:layout_marginStart="34dp"
-        android:layout_marginTop="49dp"
+        android:layout_marginTop="66dp"
         android:ellipsize="end"
         android:fontFamily="sans-serif-medium"
         android:maxLines="1"
@@ -161,7 +161,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="start|top"
         android:layout_marginStart="34dp"
-        android:layout_marginTop="59dp"
+        android:layout_marginTop="77dp"
         android:fontFamily="sans-serif-black"
         android:maxLines="1"
         android:textColor="@android:color/white"
@@ -174,7 +174,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="start|top"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="82dp"
+        android:layout_marginTop="99dp"
         android:fontFamily="sans-serif-medium"
         android:maxLines="2"
         android:textColor="@android:color/white"

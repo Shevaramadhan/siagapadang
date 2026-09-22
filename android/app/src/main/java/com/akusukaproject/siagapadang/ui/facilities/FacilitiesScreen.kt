@@ -396,12 +396,12 @@ private fun ZoneRiskLegend() {
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
         )
-        // Hijau mudah dikira "aman", padahal yang diketahui hanya bahwa petak itu berada di luar
-        // poligon rendaman yang tercatat. Labelnya ditulis utuh supaya tidak disalahartikan.
-        ZoneLegendDot("Di luar zona rendaman", Color(0xFF00A152))
-        ZoneLegendDot("Zona bahaya rendah", Color(0xFFE0B900))
-        ZoneLegendDot("Zona bahaya sedang", Color(0xFFE65C00))
-        ZoneLegendDot("Zona bahaya tinggi", Color(0xFFC62828))
+        // Hijau berasal dari tb_safe_zones — kawasan aman yang ditetapkan beserta elevasinya —
+        // jadi labelnya sama dengan legenda di layar evakuasi.
+        ZoneLegendDot("Kawasan aman", Color(0xFF00A152))
+        ZoneLegendDot("Bahaya rendah", Color(0xFFE0B900))
+        ZoneLegendDot("Bahaya sedang", Color(0xFFE65C00))
+        ZoneLegendDot("Bahaya tinggi", Color(0xFFC62828))
     }
 }
 

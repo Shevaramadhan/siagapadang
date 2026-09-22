@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -55,6 +56,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.akusukaproject.siagapadang.data.remote.model.OccupancyStatusResponseDto
@@ -114,6 +116,7 @@ import com.akusukaproject.siagapadang.data.model.EvacuationRoute
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
 import com.akusukaproject.siagapadang.data.model.InundationZoneStatus
 import com.akusukaproject.siagapadang.domain.EarthquakeRelevance
+import com.akusukaproject.siagapadang.domain.EarthquakeAgeFormatter
 import com.akusukaproject.siagapadang.domain.ManeuverGuidance
 import com.akusukaproject.siagapadang.domain.ManeuverType
 import com.akusukaproject.siagapadang.domain.BearingCalculator
@@ -184,7 +187,9 @@ fun EvacuationScreen(
         evidenceDestinationCapacity = evidenceDestinationCapacity,
         onRequestLocationPermission = ::requestLocationPermission,
         onRetryRoute = viewModel::retryRoute,
+        onSelectPreviousRoute = viewModel::selectPreviousRoute,
         onRecheckInitialZone = viewModel::recheckInitialZone,
+        onDismissInitialZoneCheckMessage = viewModel::dismissInitialZoneCheckMessage,
         onRefreshBmkgStatus = viewModel::refreshBmkgStatus,
         onCheckDataUpdates = viewModel::checkDataUpdates,
         onInstallDataUpdate = viewModel::installDataUpdate,
@@ -207,7 +212,9 @@ private fun EvacuationContent(
     evidenceDestinationCapacity: Int?,
     onRequestLocationPermission: () -> Unit,
     onRetryRoute: () -> Unit,
+    onSelectPreviousRoute: (EvacuationRoute) -> Unit,
     onRecheckInitialZone: () -> Unit,
+    onDismissInitialZoneCheckMessage: () -> Unit,
     onRefreshBmkgStatus: () -> Unit,
     onCheckDataUpdates: () -> Unit,
     onInstallDataUpdate: () -> Unit,
@@ -287,6 +294,7 @@ private fun EvacuationContent(
                 showBlockedRouteDialog = true
             },
             onRecheckInitialZone = onRecheckInitialZone,
+            onSelectPreviousRoute = onSelectPreviousRoute,
             onMapViewportChanged = onMapViewportChanged,
             modifier = Modifier.align(Alignment.BottomCenter),
             onExpandMap = {
@@ -404,7 +412,6 @@ private fun EvacuationContent(
         val route = state.route
         if (state.isOutsideInundationZoneAtStart) {
             OutsideZoneStartState(
-                state = state,
                 scale = scale,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -462,48 +469,29 @@ private fun EvacuationContent(
         }
 
         state.obstructionReportMessage?.let { message ->
-            // Banner menutupi sebagian kartu arah, jadi ditampilkan sementara saja.
             LaunchedEffect(message) {
                 delay(OBSTRUCTION_MESSAGE_VISIBLE_MILLIS)
                 onDismissObstructionMessage()
             }
-            Surface(
-                color = SiagaCream,
-                contentColor = SiagaNavy,
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.5.dp, SiagaRust),
-                shadowElevation = 6.dp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 96.dp, start = 14.dp, end = 14.dp)
-                    .fillMaxWidth()
-                    .zIndex(32f),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = message,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(
-                        onClick = onDismissObstructionMessage,
-                        modifier = Modifier.size(48.dp),
-                    ) {
-                        Image(
-                            painter = painterResource(R.drawable.ic_figma_close),
-                            contentDescription = "Tutup info hambatan",
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
-            }
+            ObstructionReportPopup(
+                message = message,
+                onDismiss = onDismissObstructionMessage,
+            )
         }
     }
+
+    state.initialZoneCheckMessage
+        ?.takeIf { state.isOutsideInundationZoneAtStart && !state.isCheckingInitialZone }
+        ?.let { message ->
+            LaunchedEffect(message) {
+                delay(ZONE_CHECK_RESULT_POPUP_MILLIS)
+                onDismissInitialZoneCheckMessage()
+            }
+            ZoneRecheckResultPopup(
+                message = message,
+                onDismiss = onDismissInitialZoneCheckMessage,
+            )
+        }
 
     if (showBlockedRouteDialog) {
         ObstacleSheet(
@@ -853,6 +841,7 @@ private fun BmkgTsunamiAlertDialog(
     status: BmkgStatus,
     onContinueEvacuation: () -> Unit,
 ) {
+    val ageLabel = rememberBmkgAgeLabel(status)
     Dialog(
         onDismissRequest = {},
         properties = DialogProperties(
@@ -896,7 +885,14 @@ private fun BmkgTsunamiAlertDialog(
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        text = "${status.eventDate} ${status.eventTime}\n${status.region}".trim(),
+                        text = listOfNotNull(
+                            ageLabel,
+                            listOf(status.eventDate, status.eventTime)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" ")
+                                .takeIf { it.isNotBlank() },
+                            status.region.takeIf { it.isNotBlank() },
+                        ).joinToString("\n"),
                         fontSize = 18.sp,
                         lineHeight = 25.sp,
                         textAlign = TextAlign.Center,
@@ -1189,6 +1185,7 @@ private fun BmkgDetailBody(
     status: BmkgStatus,
     currentLocation: GeoCoordinate?,
 ) {
+    val ageLabel = rememberBmkgAgeLabel(status)
     val distanceKm = EarthquakeRelevance.distanceKm(status.epicenter, currentLocation)
     val distanceLabel = EarthquakeRelevance.distanceLabel(
         distanceKm = distanceKm,
@@ -1238,6 +1235,7 @@ private fun BmkgDetailBody(
         val timestamp = listOf(status.eventDate, status.eventTime).filter { it.isNotBlank() }.joinToString(" ")
         Text(
             text = listOfNotNull(
+                ageLabel,
                 timestamp.takeIf { it.isNotBlank() },
                 if (status.isStale) "Tersimpan, belum diperbarui" else null,
                 "Sumber: BMKG",
@@ -1260,6 +1258,7 @@ private fun FarAwayBmkgBody(
     status: BmkgStatus,
     distanceLabel: String?,
 ) {
+    val ageLabel = rememberBmkgAgeLabel(status)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "Gempa terbaru yang dilaporkan BMKG berada jauh dari Sumatera Barat.",
@@ -1288,6 +1287,7 @@ private fun FarAwayBmkgBody(
         )
         Text(
             text = listOfNotNull(
+                ageLabel,
                 listOf(status.eventDate, status.eventTime)
                     .filter { it.isNotBlank() }
                     .joinToString(" ")
@@ -1298,6 +1298,27 @@ private fun FarAwayBmkgBody(
             fontSize = 11.sp,
             lineHeight = 15.sp,
             fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun rememberBmkgAgeLabel(status: BmkgStatus): String? {
+    var nowMillis by remember(status.isoDateTime, status.eventDate, status.eventTime) {
+        mutableStateOf(System.currentTimeMillis())
+    }
+    LaunchedEffect(status.isoDateTime, status.eventDate, status.eventTime) {
+        while (true) {
+            delay(60_000L)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+    return remember(status.isoDateTime, status.eventDate, status.eventTime, nowMillis) {
+        EarthquakeAgeFormatter.relativeAge(
+            isoDateTime = status.isoDateTime,
+            eventDate = status.eventDate,
+            eventTime = status.eventTime,
+            nowMillis = nowMillis,
         )
     }
 }
@@ -1362,6 +1383,11 @@ private fun StatusDetailCard(
     modifier: Modifier = Modifier,
     caretEndOffset: Dp? = null,
 ) {
+    val bmkgAgeLabel = if (state.bmkgStatus != null) {
+        rememberBmkgAgeLabel(state.bmkgStatus)
+    } else {
+        null
+    }
     val title: String
     val message: String
     val color: Color
@@ -1405,6 +1431,7 @@ private fun StatusDetailCard(
                     val distanceKm = EarthquakeRelevance.distanceKm(bmkg.epicenter, state.currentLocation)
                     val isFarAway = distanceKm != null && distanceKm > EarthquakeRelevance.ALERT_RADIUS_KM
                     listOfNotNull(
+                        bmkgAgeLabel,
                         bmkg.region.takeIf { it.isNotBlank() },
                         EarthquakeRelevance.distanceLabel(
                             distanceKm = distanceKm,
@@ -1609,57 +1636,109 @@ private fun DirectOrientationCard(
             deviceHeading = heading.toDouble(),
         )
     } ?: orientation.bearingDegrees.toFloat()
-    val shape = RoundedCornerShape((18f * scale).dp)
+    val shape = RoundedCornerShape((28f * scale).dp)
     Surface(
-        color = SiagaCream,
+        color = Color.White,
         contentColor = SiagaNavy,
         shape = shape,
-        border = BorderStroke(2.dp, SiagaWarning),
+        shadowElevation = 6.dp,
         modifier = modifier
-            .size(width = (213f * scale).dp, height = (239f * scale).dp)
-            .shadow(4.dp, shape),
+            .fillMaxWidth()
+            .shadow(6.dp, shape),
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = (10f * scale).dp, vertical = (12f * scale).dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(
-                text = "Orientasi terakhir",
-                color = SiagaRust,
-                fontSize = (15f * scale).sp,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-            )
-            Image(
-                painter = painterResource(R.drawable.ic_figma_straight_arrow),
-                contentDescription = "Arah lurus ${cardinalDirection(orientation.bearingDegrees)}",
-                colorFilter = ColorFilter.tint(SiagaNavy),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(
+                    horizontal = (18f * scale).dp,
+                    vertical = (18f * scale).dp,
+                ),
+            ) {
+                Surface(
+                    color = SiagaNavy,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape((22f * scale).dp),
+                    modifier = Modifier.size((112f * scale).dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_figma_straight_arrow),
+                            contentDescription =
+                                "Arah lurus ${cardinalDirection(orientation.bearingDegrees)}",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size((72f * scale).dp)
+                                .graphicsLayer(rotationZ = arrowRotation),
+                        )
+                    }
+                }
+                Spacer(Modifier.width((16f * scale).dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        color = SiagaWarning,
+                        contentColor = SiagaNavy,
+                        shape = RoundedCornerShape((9f * scale).dp),
+                    ) {
+                        Text(
+                            text = "ORIENTASI TERAKHIR",
+                            fontSize = (10f * scale).sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.5.sp,
+                            modifier = Modifier.padding(
+                                horizontal = (8f * scale).dp,
+                                vertical = (4f * scale).dp,
+                            ),
+                        )
+                    }
+                    Spacer(Modifier.height((8f * scale).dp))
+                    Text(
+                        text = "Ikuti arah ${cardinalDirection(orientation.bearingDegrees)}",
+                        fontSize = (25f * scale).sp,
+                        lineHeight = (29f * scale).sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    Text(
+                        text = "±${formatDistance(orientation.distanceMeters)} lurus",
+                        color = SiagaTextSecondary,
+                        fontSize = (15f * scale).sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .size((82f * scale).dp)
-                    .graphicsLayer(rotationZ = arrowRotation),
-            )
-            Text(
-                text = cardinalDirection(orientation.bearingDegrees),
-                color = SiagaNavy,
-                fontSize = (20f * scale).sp,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "Jarak lurus ${formatDistance(orientation.distanceMeters)}",
-                color = SiagaNavy,
-                fontSize = (13f * scale).sp,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = orientation.destinationName,
-                color = SiagaNavy,
-                fontSize = (12f * scale).sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+                    .fillMaxWidth()
+                    .background(SiagaTailGray)
+                    .padding(horizontal = (18f * scale).dp, vertical = (12f * scale).dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_ms_location_on),
+                    contentDescription = null,
+                    tint = SiagaNavy,
+                    modifier = Modifier.size((22f * scale).dp),
+                )
+                Spacer(Modifier.width((8f * scale).dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "TUJUAN ORIENTASI",
+                        color = SiagaTextSecondary,
+                        fontSize = (10f * scale).sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.4.sp,
+                    )
+                    Text(
+                        text = orientation.destinationName,
+                        fontSize = (15f * scale).sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
@@ -1670,20 +1749,51 @@ private fun DirectOrientationWarning(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = SiagaWarning,
+        color = Color.White,
         contentColor = SiagaNavy,
-        shape = RoundedCornerShape((12f * scale).dp),
-        border = BorderStroke(1.dp, SiagaNavy),
-        modifier = modifier.size(width = (314f * scale).dp, height = (72f * scale).dp),
+        shape = RoundedCornerShape((22f * scale).dp),
+        border = BorderStroke(1.5.dp, SiagaRustDeep),
+        shadowElevation = 5.dp,
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = "Bukan rute aman atau rute yang telah diperiksa. Jauhi arah pantai dan ikuti petugas atau rambu evakuasi.",
-            fontSize = (11f * scale).sp,
-            lineHeight = (14f * scale).sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = (12f * scale).dp, vertical = (9f * scale).dp),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(
+                horizontal = (16f * scale).dp,
+                vertical = (14f * scale).dp,
+            ),
+        ) {
+            Surface(
+                color = SiagaRustDeep.copy(alpha = 0.12f),
+                contentColor = SiagaRustDeep,
+                shape = CircleShape,
+                modifier = Modifier.size((44f * scale).dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_ms_warning),
+                        contentDescription = null,
+                        modifier = Modifier.size((25f * scale).dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width((12f * scale).dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Arah darurat, bukan rute jalan",
+                    color = SiagaRustDeep,
+                    fontSize = (15f * scale).sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    text = "Jauhi pantai. Ikuti petugas, rambu, dan kondisi jalan di sekitar Anda.",
+                    color = SiagaTextSecondary,
+                    fontSize = (12f * scale).sp,
+                    lineHeight = (16f * scale).sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
@@ -1972,6 +2082,7 @@ private fun EvacuationMapPanel(
     expansionProgress: Float,
     onBlockedRouteClick: () -> Unit,
     onRecheckInitialZone: () -> Unit,
+    onSelectPreviousRoute: (EvacuationRoute) -> Unit,
     onMapViewportChanged: (GeoCoordinate) -> Unit,
     modifier: Modifier = Modifier,
     onExpandMap: () -> Unit = {},
@@ -1982,6 +2093,8 @@ private fun EvacuationMapPanel(
     // Tinggi tombol tindakan di bawah diukur agar tombol pusatkan berdiri di atasnya dengan
     // jarak tetap, berapa pun banyak baris teks yang dipakai tombol itu.
     var bottomActionHeightPx by remember { mutableIntStateOf(0) }
+    var zoneLegendHeightPx by remember { mutableIntStateOf(0) }
+    var isZoneLegendExpanded by rememberSaveable { mutableStateOf(false) }
     var routeOverviewRequest by rememberSaveable { mutableIntStateOf(0) }
     var routeChangeNotice by remember { mutableStateOf<String?>(null) }
     var zoneStatusNotice by remember { mutableStateOf<String?>(null) }
@@ -2011,6 +2124,23 @@ private fun EvacuationMapPanel(
             .height(mapHeight)
             .clip(shape),
     ) {
+        val mapDensity = LocalDensity.current
+        val controlBottomPadding = if (state.isOutsideInundationZoneAtStart) {
+            28.dp
+        } else if (bottomActionHeightPx > 0) {
+            with(mapDensity) { bottomActionHeightPx.toDp() } + 24.dp
+        } else {
+            108.dp
+        }
+        val collapsedZoneHeightPx = with(mapDensity) { 48.dp.roundToPx() }
+        val expandedZoneExtraHeight = if (
+            isZoneLegendExpanded && zoneLegendHeightPx > collapsedZoneHeightPx
+        ) {
+            with(mapDensity) { (zoneLegendHeightPx - collapsedZoneHeightPx).toDp() }
+        } else {
+            0.dp
+        }
+        val routeHistoryBottomPadding = controlBottomPadding + 64.dp + expandedZoneExtraHeight
         val isApproachingRoute = state.guidance?.isApproachingRoute == true
         val nearestRouteCoordinate = state.guidance?.nearestRouteCoordinate
         val routeCoordinates = if (
@@ -2086,19 +2216,36 @@ private fun EvacuationMapPanel(
             if (expansionProgress < 0.5f) {
                 CompactZoneStatusPill(
                     status = state.currentZoneStatus,
-                    onClick = onExpandMap,
+                    onClick = {
+                        isZoneLegendExpanded = true
+                        onExpandMap()
+                    },
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 8.dp)
-                        .zIndex(8f),
+                        .align(Alignment.BottomStart)
+                        .padding(
+                            start = 16.dp,
+                            bottom = if (state.isOutsideInundationZoneAtStart) {
+                                84.dp
+                            } else {
+                                controlBottomPadding
+                            },
+                        )
+                        .zIndex(10f),
                 )
             } else {
                 ZoneStatusPill(
                     status = state.currentZoneStatus,
+                    expanded = isZoneLegendExpanded,
+                    onExpandedChange = { isZoneLegendExpanded = it },
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
-                        .zIndex(8f),
+                        .padding(
+                            start = 16.dp,
+                            end = 88.dp,
+                            bottom = controlBottomPadding,
+                        )
+                        .onSizeChanged { zoneLegendHeightPx = it.height }
+                        .zIndex(10f),
                 )
             }
         }
@@ -2110,8 +2257,12 @@ private fun EvacuationMapPanel(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
-                    .zIndex(8f),
+                    .padding(
+                        start = 16.dp,
+                        end = 88.dp,
+                        bottom = routeHistoryBottomPadding,
+                    )
+                    .zIndex(9f),
             ) {
                 if (routeChangeNotice != null) {
                     RouteChangeNotice(message = routeChangeNotice.orEmpty(), scale = scale)
@@ -2119,14 +2270,16 @@ private fun EvacuationMapPanel(
                 // Daftar tujuan sebelumnya tetap terlihat walau pemberitahuan sedang tampil,
                 // supaya pengguna masih bisa membaca nama tempat yang baru saja ditinggalkan.
                 if (state.previousRoutes.isNotEmpty() && expansionProgress >= 0.5f) {
-                    PreviousRoutesPill(routes = state.previousRoutes)
+                    PreviousRoutesPill(
+                        routes = state.previousRoutes,
+                        onSelectRoute = onSelectPreviousRoute,
+                    )
                 }
             }
         }
 
         if (state.isOutsideInundationZoneAtStart) {
             ExpandedOutsideZoneHeader(
-                zoneCheckMessage = state.initialZoneCheckMessage,
                 modifier = Modifier.graphicsLayer(alpha = expansionProgress),
             )
         }
@@ -2138,7 +2291,15 @@ private fun EvacuationMapPanel(
                     .graphicsLayer(alpha = expansionProgress)
                     .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onCollapseMap() }) },
             )
-        } else state.route?.takeIf { state.directOrientation == null }?.let { route ->
+        } else if (state.directOrientation != null) {
+            ExpandedDirectOrientationHeader(
+                orientation = state.directOrientation,
+                deviceHeadingDegrees = state.deviceHeadingDegrees,
+                modifier = Modifier
+                    .graphicsLayer(alpha = expansionProgress)
+                    .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onCollapseMap() }) },
+            )
+        } else state.route?.let { route ->
             ExpandedMapHeader(
                 route = route,
                 guidance = state.guidance,
@@ -2200,11 +2361,7 @@ private fun EvacuationMapPanel(
                     .align(Alignment.BottomEnd)
                     .padding(
                         end = 16.dp,
-                        bottom = if (bottomActionHeightPx > 0) {
-                            with(LocalDensity.current) { bottomActionHeightPx.toDp() } + 12.dp
-                        } else {
-                            96.dp
-                        },
+                        bottom = controlBottomPadding,
                     )
                     .zIndex(9f),
             )
@@ -2215,9 +2372,9 @@ private fun EvacuationMapPanel(
                 isChecking = state.isCheckingInitialZone,
                 onClick = onRecheckInitialZone,
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = (15f * scale).dp, vertical = (12f * scale).dp)
-                    .onSizeChanged { bottomActionHeightPx = it.height },
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp, bottom = 16.dp)
+                    .widthIn(min = 190.dp, max = 220.dp),
             )
         }
 
@@ -2332,17 +2489,21 @@ private fun ZoneStatusNotice(
 @Composable
 private fun ZoneStatusPill(
     status: InundationZoneStatus?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
     val appearance = zoneStatusAppearance(status)
-    // Padding berada di dalam area clickable, sehingga pil tetap ramping tetapi sasaran
-    // sentuhnya memenuhi 48 dp (NF-06).
-    Box(
+    Surface(
+        color = Color.White,
+        contentColor = SiagaNavy,
+        shape = if (expanded) RoundedCornerShape(18.dp) else CircleShape,
+        border = BorderStroke(1.dp, SiagaLine),
+        shadowElevation = 4.dp,
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(role = Role.Button) { expanded = !expanded }
-            .padding(vertical = 6.dp)
+            .clip(if (expanded) RoundedCornerShape(18.dp) else CircleShape)
+            .clickable(role = Role.Button) { onExpandedChange(!expanded) }
+            .animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS))
             .semantics {
                 contentDescription = if (expanded) {
                     "Ciutkan keterangan warna zona"
@@ -2351,41 +2512,43 @@ private fun ZoneStatusPill(
                 }
             },
     ) {
-    Surface(
-        color = Color.White,
-        contentColor = SiagaNavy,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = 6.dp,
-        modifier = Modifier.animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS)),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(appearance.dotColor),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = appearance.label,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                Spacer(Modifier.width(6.dp))
+        if (!expanded) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
                 Icon(
-                    painterResource(if (expanded) R.drawable.ic_ms_expand_more else R.drawable.ic_ms_expand_less),
+                    painterResource(R.drawable.ic_ms_warning),
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    tint = appearance.dotColor,
+                    modifier = Modifier.size(26.dp),
                 )
             }
-            if (expanded) {
+        } else {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(appearance.dotColor),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = appearance.label,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        painterResource(R.drawable.ic_ms_expand_more),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
                 Text(
                     text = "Warna pada peta",
                     fontSize = 12.sp,
@@ -2395,7 +2558,6 @@ private fun ZoneStatusPill(
                 ZoneLegendEntry.entries.forEach { legend -> ZoneLegendItem(legend) }
             }
         }
-    }
     }
 }
 
@@ -2410,60 +2572,27 @@ private fun CompactZoneStatusPill(
     modifier: Modifier = Modifier,
 ) {
     val appearance = zoneStatusAppearance(status)
-    val compactLabel = when (status) {
-        null, InundationZoneStatus.DataUnavailable -> "Status zona"
-        InundationZoneStatus.OutsideRecordedZone -> "Di luar zona"
-        is InundationZoneStatus.InsideRecordedZone -> when (status.dangerLevel.trim().lowercase()) {
-            "tinggi" -> "Bahaya tinggi"
-            "sedang" -> "Bahaya sedang"
-            "rendah" -> "Bahaya rendah"
-            else -> "Zona risiko"
-        }
-    }
-    Box(
-        contentAlignment = Alignment.Center,
+    Surface(
+        color = Color.White,
+        contentColor = SiagaNavy,
+        shape = CircleShape,
+        border = BorderStroke(1.dp, SiagaLine),
+        shadowElevation = 4.dp,
         modifier = modifier
-            .width(120.dp)
-            .height(48.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .size(48.dp)
+            .clip(CircleShape)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = "${appearance.label}. Perbesar peta untuk melihat keterangan zona"
             },
     ) {
-        Surface(
-            color = Color.White,
-            contentColor = SiagaNavy,
-            shape = RoundedCornerShape(16.dp),
-            shadowElevation = 6.dp,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(appearance.dotColor),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = compactLabel,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(3.dp))
-                Icon(
-                    painterResource(R.drawable.ic_ms_expand_less),
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painterResource(R.drawable.ic_ms_warning),
+                contentDescription = null,
+                tint = appearance.dotColor,
+                modifier = Modifier.size(26.dp),
+            )
         }
     }
 }
@@ -2500,6 +2629,7 @@ private fun ZoneLegendItem(entry: ZoneLegendEntry) {
 @Composable
 private fun PreviousRoutesPill(
     routes: List<EvacuationRoute>,
+    onSelectRoute: (EvacuationRoute) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -2508,48 +2638,67 @@ private fun PreviousRoutesPill(
         contentColor = SiagaNavy,
         shape = RoundedCornerShape(18.dp),
         shadowElevation = 6.dp,
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(role = Role.Button) { expanded = !expanded }
-            .animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS))
-            .semantics {
-                contentDescription = if (expanded) {
-                    "Ciutkan daftar rute sebelumnya"
-                } else {
-                    "Buka daftar ${routes.size} rute sebelumnya"
-                }
-            },
+        modifier = modifier.width(if (expanded) 208.dp else 144.dp),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(
+                horizontal = if (expanded) 12.dp else 8.dp,
+                vertical = if (expanded) 8.dp else 0.dp,
+            ),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PreviousRouteDash()
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Rute sebelumnya (${routes.size})",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    painterResource(if (expanded) R.drawable.ic_ms_expand_more else R.drawable.ic_ms_expand_less),
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
             if (expanded) {
                 Text(
-                    text = "Tergambar samar di peta sebagai pembanding. Tujuan ini tidak dipakai lagi.",
+                    text = "Ketuk tujuan untuk menggunakannya kembali. Rute saat ini akan tetap tersedia.",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = SiagaTextSecondary,
                 )
                 routes.forEachIndexed { index, route ->
                     PreviousRouteItem(
-                        order = if (index == 0) "Tujuan awal" else "Alternatif $index",
+                        order = if (index == 0) "Rute terakhir" else "Rute sebelumnya",
                         route = route,
+                        onClick = { onSelectRoute(route) },
+                    )
+                }
+            }
+            // Judul diletakkan terakhir agar tetap menempel pada posisi bawah saat daftar dibuka.
+            // Sasaran sentuh tidak berpindah, sehingga ketukan kedua selalu menutup daftar.
+            Box(
+                contentAlignment = Alignment.CenterStart,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(role = Role.Button) { expanded = !expanded }
+                    .semantics {
+                        contentDescription = if (expanded) {
+                            "Ciutkan daftar rute sebelumnya"
+                        } else {
+                            "Buka daftar ${routes.size} rute sebelumnya"
+                        }
+                    },
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    PreviousRouteDash()
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Rute lalu (${routes.size})",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        painterResource(
+                            if (expanded) R.drawable.ic_ms_expand_more else R.drawable.ic_ms_expand_less,
+                        ),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }
@@ -2557,21 +2706,29 @@ private fun PreviousRoutesPill(
     }
 }
 
-/** Satu baris tujuan yang ditinggalkan: urutan, jenis fasilitas, nama, dan perkiraan waktunya. */
+/** Satu baris tujuan yang ditinggalkan dan dapat dipilih kembali. */
 @Composable
 private fun PreviousRouteItem(
     order: String,
     route: EvacuationRoute,
+    onClick: () -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.widthIn(max = 260.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .widthIn(max = 208.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = 7.dp, horizontal = 6.dp),
+    ) {
         Icon(
-            painterResource(R.drawable.ic_ms_arrow_forward),
+            painterResource(R.drawable.ic_ms_route),
             contentDescription = null,
             tint = SiagaTailGray,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(8.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FacilityKindBadge(kind = route.destinationKind)
                 Spacer(Modifier.width(6.dp))
@@ -2591,6 +2748,13 @@ private fun PreviousRouteItem(
                 maxLines = 1,
             )
         }
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            painterResource(R.drawable.ic_ms_arrow_forward),
+            contentDescription = "Pilih ${route.destinationName}",
+            tint = SiagaNavy,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
@@ -2712,11 +2876,10 @@ private fun CompassDial(scale: Float) {
  */
 @Composable
 private fun ExpandedOutsideZoneHeader(
-    zoneCheckMessage: String?,
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = SiagaNavy,
+        color = WidgetSafeBlue,
         contentColor = Color.White,
         shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
         shadowElevation = 6.dp,
@@ -2724,49 +2887,55 @@ private fun ExpandedOutsideZoneHeader(
             .fillMaxWidth()
             .height(EXPANDED_HEADER_HEIGHT),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 44.dp, bottom = 16.dp),
-        ) {
-            Surface(
-                color = SiagaSafeGreen,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(44.dp),
+        Box(modifier = Modifier.fillMaxSize()) {
+            Image(
+                painter = painterResource(R.drawable.figma_widget_safe_bg),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(x = (-12).dp)
+                    .width(193.dp)
+                    .height(EXPANDED_HEADER_HEIGHT),
+            )
+            Image(
+                painter = painterResource(R.drawable.figma_widget_safe_character),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 24.dp)
+                    .width(233.dp)
+                    .height(EXPANDED_HEADER_HEIGHT),
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth(0.72f)
+                    .padding(start = 16.dp, top = 28.dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painterResource(R.drawable.ic_ms_location_on),
-                        contentDescription = null,
-                        modifier = Modifier.size(26.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Di luar zona rendaman",
+                    text = "Anda berada di luar zona rendaman",
                     fontSize = 19.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
+                    lineHeight = 22.sp,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    text = zoneCheckMessage
-                        ?: "Navigasi dan hitung mundur tidak dimulai. Tetap menjauh dari pantai dan sungai.",
-                    color = SiagaOnNavyMuted,
-                    fontSize = 13.sp,
-                    lineHeight = 17.sp,
+                    text = "Berdasarkan data zona yang tersimpan di HP.",
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
     }
 }
-
 @Composable
 private fun RecheckPositionButton(
     isChecking: Boolean,
@@ -2776,13 +2945,13 @@ private fun RecheckPositionButton(
     Surface(
         color = Color.White,
         contentColor = SiagaNavy,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         border = BorderStroke(2.dp, SiagaNavy),
         shadowElevation = 8.dp,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 64.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .heightIn(min = 50.dp)
+            .clip(RoundedCornerShape(18.dp))
             .clickable(role = Role.Button, enabled = !isChecking, onClick = onClick)
             .semantics {
                 contentDescription = if (isChecking) {
@@ -2795,28 +2964,103 @@ private fun RecheckPositionButton(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             if (isChecking) {
-                CircularProgressIndicator(color = SiagaNavy, strokeWidth = 2.5.dp, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Memeriksa…", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                CircularProgressIndicator(
+                    color = SiagaNavy,
+                    strokeWidth = 2.5.dp,
+                    modifier = Modifier.size(19.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Memeriksa...", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
             } else {
                 Icon(
                     painterResource(R.drawable.ic_ms_my_location),
                     contentDescription = null,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(20.dp),
                 )
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text("Periksa posisi lagi", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                    Text(
-                        text = "Bila Anda sudah berpindah tempat",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = SiagaTextSecondary,
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Periksa posisi lagi",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+@Composable
+private fun ExpandedDirectOrientationHeader(
+    orientation: DirectOrientation,
+    deviceHeadingDegrees: Float?,
+    modifier: Modifier = Modifier,
+) {
+    val arrowRotation = deviceHeadingDegrees?.let { heading ->
+        BearingCalculator.relativeRotationDegrees(
+            targetBearing = orientation.bearingDegrees,
+            deviceHeading = heading.toDouble(),
+        )
+    } ?: orientation.bearingDegrees.toFloat()
+    Surface(
+        color = SiagaNavy,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(EXPANDED_HEADER_HEIGHT),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 86.dp, top = 14.dp, bottom = 34.dp),
+        ) {
+            Surface(
+                color = SiagaWarning,
+                contentColor = SiagaNavy,
+                shape = RoundedCornerShape(22.dp),
+                modifier = Modifier.size(84.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_figma_straight_arrow),
+                        contentDescription =
+                            "Arah lurus ${cardinalDirection(orientation.bearingDegrees)}",
+                        modifier = Modifier
+                            .size(50.dp)
+                            .graphicsLayer(rotationZ = arrowRotation),
                     )
                 }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Orientasi terakhir",
+                    color = SiagaWarning,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.4.sp,
+                )
+                Text(
+                    text = "Arah ${cardinalDirection(orientation.bearingDegrees)}",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    text = "±${formatDistance(orientation.distanceMeters)} lurus",
+                    color = SiagaOnNavyMuted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = orientation.destinationName,
+                    color = SiagaOnNavyMuted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -3070,7 +3314,7 @@ private fun RecenterMapButton(
                     shadowElevation = 6.dp,
                 ) {
                     Text(
-                        text = "Kembali ke titik Anda",
+                        text = "Ke posisi Anda",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -3108,7 +3352,7 @@ private fun RecenterMapButton(
                     contentDescription = if (isFollowing) {
                         "Peta mengikuti posisi Anda"
                     } else {
-                        "Peta tidak lagi terpusat. Kembali ke titik Anda"
+                        "Peta tidak lagi terpusat. Pusatkan ke posisi Anda"
                     }
                 },
         ) {
@@ -3216,8 +3460,13 @@ private fun RoutePreparationState(
             detail = "Pastikan GPS perangkat aktif. Arahan tetap disiapkan tanpa jaringan."
         }
         state.isCheckingInitialZone -> {
-            title = "Memeriksa zona…"
-            detail = "Posisi awal diperiksa dari data zona yang tersimpan di perangkat."
+            title = if (state.initialZoneCheckMessage == null) {
+                "Memeriksa zona…"
+            } else {
+                "Menunggu GPS lebih akurat…"
+            }
+            detail = state.initialZoneCheckMessage
+                ?: "Posisi awal diperiksa dari data zona yang tersimpan di perangkat."
         }
         else -> {
             title = "Menyiapkan arahan…"
@@ -3276,72 +3525,263 @@ private fun RoutePreparationState(
 
 @Composable
 private fun OutsideZoneStartState(
-    state: EvacuationUiState,
     scale: Float,
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        color = SiagaCream,
-        contentColor = SiagaNavy,
+        color = WidgetSafeBlue,
+        contentColor = Color.White,
         shape = RoundedCornerShape((22f * scale).dp),
         shadowElevation = 8.dp,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .height((238f * scale).dp),
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy((12f * scale).dp),
-            modifier = Modifier.padding((20f * scale).dp),
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape((22f * scale).dp)),
         ) {
-            Surface(
-                color = SiagaSafeGreen,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size((52f * scale).dp),
+            Image(
+                painter = painterResource(R.drawable.figma_widget_safe_bg),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.BottomStart,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(x = (-16).dp)
+                    .fillMaxWidth(0.62f)
+                    .fillMaxHeight(),
+            )
+            Image(
+                painter = painterResource(R.drawable.figma_widget_safe_character),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.BottomEnd,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 16.dp)
+                    .fillMaxWidth(0.72f)
+                    .fillMaxHeight(),
+            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy((5f * scale).dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth(0.76f)
+                    .padding(start = (18f * scale).dp, top = (18f * scale).dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_ms_location_on),
+                Text(
+                    text = "Anda berada di luar zona rendaman",
+                    fontSize = (22f * scale).sp,
+                    lineHeight = (25f * scale).sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = "Berdasarkan data zona yang tersimpan di HP.",
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = (12f * scale).sp,
+                    lineHeight = (15f * scale).sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Surface(
+                color = SiagaNavy,
+                contentColor = Color.White,
+                shape = RoundedCornerShape((14f * scale).dp),
+                shadowElevation = 3.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = (16f * scale).dp, bottom = (16f * scale).dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(
+                        horizontal = (12f * scale).dp,
+                        vertical = (9f * scale).dp,
+                    ),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.figma_widget_safe_button_icon),
                         contentDescription = null,
-                        modifier = Modifier.size((30f * scale).dp),
+                        modifier = Modifier.size((19f * scale).dp),
+                    )
+                    Spacer(Modifier.width((7f * scale).dp))
+                    Text(
+                        text = "Jauhi pantai dan sungai",
+                        fontSize = (12f * scale).sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
                     )
                 }
             }
-            Text(
-                text = "Anda berada di luar zona rendaman",
-                fontSize = (22f * scale).sp,
-                lineHeight = (26f * scale).sp,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "Navigasi dan hitung mundur tidak dimulai karena posisi awal berada di luar zona rendaman yang tercatat.",
-                fontSize = (14f * scale).sp,
-                lineHeight = (19f * scale).sp,
-                textAlign = TextAlign.Center,
-            )
-            Surface(
-                color = Color.White,
-                contentColor = SiagaNavy,
-                shape = RoundedCornerShape((14f * scale).dp),
-                modifier = Modifier.fillMaxWidth(),
+        }
+    }
+}
+
+
+@Composable
+private fun ObstructionReportPopup(
+    message: String,
+    onDismiss: () -> Unit,
+) {
+    val normalized = message.lowercase()
+    val presentation = when {
+        "ditolak" in normalized || "berbeda" in normalized -> ObstructionPopupPresentation(
+            title = "Laporan belum diterima",
+            iconRes = R.drawable.ic_ms_warning,
+            accent = SiagaRustDeep,
+        )
+        "offline" in normalized || "koneksi" in normalized || "server" in normalized -> ObstructionPopupPresentation(
+            title = "Laporan disimpan",
+            iconRes = R.drawable.ic_ms_wifi_off,
+            accent = SiagaWarning,
+        )
+        "diproses" in normalized -> ObstructionPopupPresentation(
+            title = "Laporan sedang diproses",
+            iconRes = R.drawable.ic_ms_sync,
+            accent = SiagaNavy,
+        )
+        else -> ObstructionPopupPresentation(
+            title = "Laporan diterima",
+            iconRes = R.drawable.ic_ms_check_circle,
+            accent = SiagaSafeGreen,
+        )
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            color = Color.White,
+            contentColor = SiagaNavy,
+            shape = RoundedCornerShape(24.dp),
+            shadowElevation = 12.dp,
+            modifier = Modifier.fillMaxWidth().widthIn(max = 330.dp),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 26.dp),
             ) {
+                Surface(
+                    color = presentation.accent.copy(alpha = 0.14f),
+                    contentColor = presentation.accent,
+                    shape = CircleShape,
+                    modifier = Modifier.size(58.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painter = painterResource(presentation.iconRes),
+                            contentDescription = null,
+                            tint = presentation.accent,
+                            modifier = Modifier.size(30.dp),
+                        )
+                    }
+                }
                 Text(
-                    text = "Tetap menjauh dari pantai dan sungai. Ikuti petugas atau rambu evakuasi.",
-                    fontSize = (13f * scale).sp,
-                    lineHeight = (18f * scale).sp,
-                    fontWeight = FontWeight.SemiBold,
+                    text = presentation.title,
+                    fontSize = 20.sp,
+                    lineHeight = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding((14f * scale).dp),
                 )
-            }
-            state.initialZoneCheckMessage?.let { message ->
                 Text(
                     text = message,
-                    color = SiagaTextSecondary,
-                    fontSize = (12f * scale).sp,
-                    lineHeight = (16f * scale).sp,
+                    color = SiagaNavy.copy(alpha = 0.78f),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
                 )
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SiagaNavy,
+                        contentColor = Color.White,
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = "Mengerti", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+private data class ObstructionPopupPresentation(
+    val title: String,
+    val iconRes: Int,
+    val accent: Color,
+)
+
+@Composable
+private fun ZoneRecheckResultPopup(
+    message: String,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            color = Color.White,
+            contentColor = SiagaNavy,
+            shape = RoundedCornerShape(24.dp),
+            shadowElevation = 12.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 330.dp),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 26.dp),
+            ) {
+                Surface(
+                    color = ZONE_SAFE_COLOR.copy(alpha = 0.14f),
+                    contentColor = ZONE_SAFE_COLOR,
+                    shape = CircleShape,
+                    modifier = Modifier.size(58.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_ms_location_on),
+                            contentDescription = null,
+                            tint = ZONE_SAFE_COLOR,
+                            modifier = Modifier.size(30.dp),
+                        )
+                    }
+                }
+                Text(
+                    text = "Hasil pemeriksaan posisi",
+                    fontSize = 20.sp,
+                    lineHeight = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = message,
+                    color = SiagaNavy.copy(alpha = 0.78f),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                )
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SiagaNavy,
+                        contentColor = Color.White,
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "Tutup",
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
     }
@@ -4177,6 +4617,7 @@ private val MAP_PANEL_SPRING = tween<Float>(durationMillis = 340, easing = FastO
 
 private const val OBSTRUCTION_MESSAGE_VISIBLE_MILLIS = 8_000L
 internal const val UI_ANIMATION_MILLIS = 280
+private val WidgetSafeBlue = Color(0xFF6AC6FF)
 private val TOP_BAR_SPACE = 76.dp
 private val EXPANDED_HEADER_HEIGHT = 150.dp
 private val MAP_HANDLE_SPACE = 28.dp
@@ -4186,6 +4627,7 @@ private const val FIGMA_MAP_HEIGHT_DP = 269f
 internal const val WALKING_SPEED_METERS_PER_SECOND = 1.2
 private const val ROUTE_CHANGE_NOTICE_MILLIS = 3_500L
 private const val ZONE_STATUS_NOTICE_MILLIS = 5_000L
+private const val ZONE_CHECK_RESULT_POPUP_MILLIS = 4_000L
 private const val MANEUVER_NOW_DISTANCE_METERS = 20
 private const val ROAD_ENTRY_REACHED_DISTANCE_METERS = 6
 private const val OFF_ROUTE_WARNING_METERS = 40

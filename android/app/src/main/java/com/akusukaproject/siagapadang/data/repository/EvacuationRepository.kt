@@ -122,6 +122,35 @@ class EvacuationRepository(
         return tesRoute
     }
 
+    /**
+     * Memuat ulang rute ke tujuan yang pernah dipakai dari simpang terdekat pengguna sekarang.
+     * Rute lama tidak dipakai mentah karena titik awalnya mungkin sudah jauh tertinggal.
+     */
+    suspend fun findRouteToDestination(
+        location: GeoCoordinate,
+        destination: EvacuationRoute,
+    ): EvacuationRoute? {
+        val nearestNode = findNearestNode(location)
+        if (destination.destinationKind.equals("TEA", ignoreCase = true)) {
+            val teaId = destination.destinationExternalId ?: return null
+            val teaRouteRow = dao.findTeaRoute(nearestNode.nodeId) ?: return null
+            val isAlternative = when (teaId) {
+                teaRouteRow.nearestTeaId -> false
+                teaRouteRow.altTeaId -> true
+                else -> return null
+            }
+            return runCatching {
+                loadTeaRoute(nearestNode.nodeId, teaId, isAlternative)
+            }.getOrNull()
+        }
+
+        val routeRow = dao.findRoute(nearestNode.nodeId) ?: return null
+        val matchingRank = (1..3).firstOrNull { rank ->
+            routeRow.select(rank).destinationName == destination.destinationName
+        } ?: return null
+        return runCatching { loadRoute(nearestNode.nodeId, matchingRank) }.getOrNull()
+    }
+
     suspend fun loadRoute(originNodeId: Long, rank: Int): EvacuationRoute {
         require(rank in 1..3) { "Peringkat rute harus 1, 2, atau 3" }
         val routeRow = dao.findRoute(originNodeId)

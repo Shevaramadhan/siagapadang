@@ -30,7 +30,9 @@ import com.akusukaproject.siagapadang.domain.ManeuverType
 import com.akusukaproject.siagapadang.domain.NearestNodeFinder
 import com.akusukaproject.siagapadang.domain.RouteGuidanceCalculator
 import com.akusukaproject.siagapadang.domain.RouteGuidanceSnapshot
+import com.akusukaproject.siagapadang.domain.RouteHistory
 import com.akusukaproject.siagapadang.domain.ZoneExitConfirmationTracker
+import com.akusukaproject.siagapadang.widget.EvacuationWidgetUpdater
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -143,6 +145,7 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun onLocationPermissionChanged(granted: Boolean) {
+        EvacuationWidgetUpdater.requestUpdate(app)
         mutableUiState.update { state ->
             state.copy(
                 hasLocationPermission = granted,
@@ -163,6 +166,61 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
         if (mutableUiState.value.isOutsideInundationZoneAtStart) return
         initialRouteRequested = false
         mutableUiState.value.currentLocation?.let(::requestInitialRoute)
+    }
+
+    fun selectPreviousRoute(selectedRoute: EvacuationRoute) {
+        val currentState = mutableUiState.value
+        val currentRoute = currentState.route ?: return
+        val currentLocation = currentState.currentLocation ?: return
+        if (
+            currentState.isLoadingRoute ||
+            currentState.hasArrived ||
+            currentState.hasEvacuationWindowExpired
+        ) return
+
+        routeJob?.cancel()
+        routeJob = viewModelScope.launch {
+            mutableUiState.update { it.copy(isLoadingRoute = true, errorMessage = null) }
+            val refreshedRoute = runCatching {
+                repository.findRouteToDestination(currentLocation, selectedRoute)
+            }.getOrNull()
+            if (refreshedRoute == null) {
+                mutableUiState.update {
+                    it.copy(
+                        isLoadingRoute = false,
+                        errorMessage = "Rute ke ${selectedRoute.destinationName} tidak tersedia dari posisi sekarang.",
+                    )
+                }
+                return@launch
+            }
+
+            rejectedDestinationNames.remove(refreshedRoute.destinationName)
+            arrivalTracker.reset()
+            resetRouteProgress()
+            mutableUiState.update { state ->
+                withGuidance(
+                    state.copy(
+                        route = refreshedRoute,
+                        previousRoutes = RouteHistory.availableAfterSelection(
+                            currentRoute = currentRoute,
+                            selectedRoute = selectedRoute,
+                            availableRoutes = state.previousRoutes,
+                        ),
+                        isLoadingRoute = false,
+                        alternativeRouteVersion = state.alternativeRouteVersion + 1,
+                        alternativeRouteMessage = "Tujuan diganti kembali ke ${refreshedRoute.destinationName}.",
+                        directOrientation = null,
+                        hasArrived = false,
+                        arrivalReason = null,
+                        arrivalDistanceMeters = null,
+                        checkinStatus = CheckinStatus.IDLE,
+                        checkinMessage = null,
+                        checkedInAt = null,
+                        errorMessage = null,
+                    ),
+                )
+            }
+        }
     }
 
     fun refreshFamilyMeetingPoint() {
@@ -743,6 +801,10 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
                         }
                     }
                     .collect { deviceLocation ->
+                        EvacuationWidgetUpdater.notifyLocationChanged(
+                            context = app,
+                            coordinate = deviceLocation.coordinate,
+                        )
                         var arrivalConfirmedNow = false
                         mutableUiState.update { state ->
                             val updatedState = withArrivalEvaluation(
@@ -801,7 +863,6 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
             mutableUiState.update {
                 it.copy(
                     isCheckingInitialZone = true,
-                    initialZoneCheckMessage = null,
                 )
             }
             val result = runCatching { zoneRepository.findStatus(deviceLocation.coordinate) }
@@ -813,9 +874,27 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
             }
             if (mutableUiState.value.isOutsideInundationZoneAtStart) return@launch
 
-            // Jika data zona atau akurasi GPS belum cukup, arahan evakuasi tetap disiapkan.
-            // Pembaruan lokasi berikutnya akan terus memeriksa zona dan dapat menghentikan
-            // navigasi bila posisi luar zona kemudian terkonfirmasi dengan akurat.
+            if (
+                status != null &&
+                shouldAwaitAccurateOutsideZone(
+                    status = status,
+                    accuracyMeters = deviceLocation.accuracyMeters,
+                    maximumAccuracyMeters = MAX_ZONE_ACCURACY_METERS,
+                )
+            ) {
+                mutableUiState.update {
+                    it.copy(
+                        isCheckingInitialZone = true,
+                        initialZoneCheckMessage =
+                            "GPS belum cukup akurat untuk memastikan posisi aman. Cari tempat yang lebih terbuka.",
+                    )
+                }
+                return@launch
+            }
+
+            // Jika data zona tidak tersedia atau posisi terbaca di dalam zona, arahan evakuasi
+            // tetap disiapkan. Hasil luar zona dengan GPS lemah ditahan sampai lokasi lebih akurat
+            // agar rute tidak sempat muncul sebelum posisi aman dikonfirmasi.
             initialLocationResolved = true
             mutableUiState.update { it.copy(isCheckingInitialZone = false) }
             requestInitialRoute(mutableUiState.value.currentLocation ?: deviceLocation.coordinate)
@@ -960,6 +1039,10 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
                 errorMessage = null,
             )
         }
+    }
+
+    fun dismissInitialZoneCheckMessage() {
+        mutableUiState.update { it.copy(initialZoneCheckMessage = null) }
     }
 
     fun recheckInitialZone() {
