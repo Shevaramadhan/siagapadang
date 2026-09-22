@@ -249,3 +249,13 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
   penuh; kejadian yang jauh tetap dijelaskan pada kartu BMKG tanpa mengambil alih layar.
 - Unit test Android: 138 lulus, 0 gagal; APK debug berhasil dibangun dan dipasang pada Infinix X6855.
   Validasi visual perangkat belum selesai karena layar perangkat terkunci saat pemeriksaan terakhir.
+
+## 22 September 2026 — Ukuran Ikon Launcher
+
+- Branch: `fix/smaller-launcher-icon`; belum di-push.
+- Ruang tepi adaptive icon ditambah dari 12 dp menjadi 20 dp. Logo yang terlihat pada home screen
+  menjadi lebih kecil dan tidak memenuhi bidang ikon, sedangkan ukuran area sentuh launcher tetap
+  mengikuti standar Android.
+- Perubahan hanya berlaku pada ikon launcher; ukuran logo splash screen tidak berubah.
+- APK debug berhasil dibangun dan dipasang pada Infinix X6855. Ikon diperiksa melalui hasil pencarian
+  app drawer: logo memiliki ruang tepi yang jelas, tidak terpotong, dan label aplikasi tetap utuh.
