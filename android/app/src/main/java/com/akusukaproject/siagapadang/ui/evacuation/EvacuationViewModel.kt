@@ -30,6 +30,7 @@ import com.akusukaproject.siagapadang.domain.ManeuverType
 import com.akusukaproject.siagapadang.domain.NearestNodeFinder
 import com.akusukaproject.siagapadang.domain.RouteGuidanceCalculator
 import com.akusukaproject.siagapadang.domain.RouteGuidanceSnapshot
+import com.akusukaproject.siagapadang.domain.RouteHistory
 import com.akusukaproject.siagapadang.domain.ZoneExitConfirmationTracker
 import com.akusukaproject.siagapadang.widget.EvacuationWidgetUpdater
 import kotlinx.coroutines.Job
@@ -165,6 +166,61 @@ class EvacuationViewModel(application: Application) : AndroidViewModel(applicati
         if (mutableUiState.value.isOutsideInundationZoneAtStart) return
         initialRouteRequested = false
         mutableUiState.value.currentLocation?.let(::requestInitialRoute)
+    }
+
+    fun selectPreviousRoute(selectedRoute: EvacuationRoute) {
+        val currentState = mutableUiState.value
+        val currentRoute = currentState.route ?: return
+        val currentLocation = currentState.currentLocation ?: return
+        if (
+            currentState.isLoadingRoute ||
+            currentState.hasArrived ||
+            currentState.hasEvacuationWindowExpired
+        ) return
+
+        routeJob?.cancel()
+        routeJob = viewModelScope.launch {
+            mutableUiState.update { it.copy(isLoadingRoute = true, errorMessage = null) }
+            val refreshedRoute = runCatching {
+                repository.findRouteToDestination(currentLocation, selectedRoute)
+            }.getOrNull()
+            if (refreshedRoute == null) {
+                mutableUiState.update {
+                    it.copy(
+                        isLoadingRoute = false,
+                        errorMessage = "Rute ke ${selectedRoute.destinationName} tidak tersedia dari posisi sekarang.",
+                    )
+                }
+                return@launch
+            }
+
+            rejectedDestinationNames.remove(refreshedRoute.destinationName)
+            arrivalTracker.reset()
+            resetRouteProgress()
+            mutableUiState.update { state ->
+                withGuidance(
+                    state.copy(
+                        route = refreshedRoute,
+                        previousRoutes = RouteHistory.availableAfterSelection(
+                            currentRoute = currentRoute,
+                            selectedRoute = selectedRoute,
+                            availableRoutes = state.previousRoutes,
+                        ),
+                        isLoadingRoute = false,
+                        alternativeRouteVersion = state.alternativeRouteVersion + 1,
+                        alternativeRouteMessage = "Tujuan diganti kembali ke ${refreshedRoute.destinationName}.",
+                        directOrientation = null,
+                        hasArrived = false,
+                        arrivalReason = null,
+                        arrivalDistanceMeters = null,
+                        checkinStatus = CheckinStatus.IDLE,
+                        checkinMessage = null,
+                        checkedInAt = null,
+                        errorMessage = null,
+                    ),
+                )
+            }
+        }
     }
 
     fun refreshFamilyMeetingPoint() {

@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.akusukaproject.siagapadang.data.model.GeoCoordinate
 import com.akusukaproject.siagapadang.data.model.OfflineRoadOverlay
 import com.akusukaproject.siagapadang.data.model.TsunamiZoneOverlay
+import com.akusukaproject.siagapadang.domain.BearingCalculator
 import com.akusukaproject.siagapadang.domain.NearestNodeFinder
 import com.akusukaproject.siagapadang.domain.PolylineSimplifier
 import com.akusukaproject.siagapadang.R
@@ -54,6 +55,7 @@ import org.maplibre.android.style.layers.PropertyFactory.fillOpacity
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconOffset
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
 import org.maplibre.android.style.layers.PropertyFactory.iconSize
 import org.maplibre.android.style.layers.PropertyFactory.circleColor
@@ -68,6 +70,9 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 private const val DEVELOPMENT_MAP_STYLE = """
     {
@@ -175,6 +180,7 @@ fun OfflineMap(
     val latestOnViewportChanged = rememberUpdatedState(onViewportChanged)
     val latestOnUserMapGesture = rememberUpdatedState(onUserMapGesture)
     val userMarkerBitmap = remember(context) { createUserMarkerBitmap(context) }
+    val destinationMarkerBitmap = remember(context) { createDestinationMarkerBitmap(context) }
     val destinationAnnotationBitmap = remember(
         context,
         destinationName,
@@ -247,6 +253,13 @@ fun OfflineMap(
                     map.cameraPosition.target?.let { target ->
                         latestOnViewportChanged.value(target.toGeoCoordinate())
                     }
+                    map.style?.let { style ->
+                        updateDestinationCardPlacement(
+                            style = style,
+                            routeCoordinates = latestRoute.value,
+                            mapBearingDegrees = map.cameraPosition.bearing,
+                        )
+                    }
                 }
                 map.setStyle(Style.Builder().fromJson(DEVELOPMENT_MAP_STYLE)) { style ->
                     updateMapOverlays(
@@ -267,6 +280,8 @@ fun OfflineMap(
                             kindLabel = latestDestinationKind.value,
                             durationLabel = latestDestinationDuration.value,
                         ),
+                        destinationMarkerBitmap = destinationMarkerBitmap,
+                        mapBearingDegrees = map.cameraPosition.bearing,
                         userMarkerBitmap = userMarkerBitmap,
                         offlineRoadOverlayTracker = cameraTracker,
                     )
@@ -370,6 +385,8 @@ fun OfflineMap(
                             currentLocation = currentLocation,
                             destinationLocation = destinationLocation,
                             destinationAnnotationBitmap = destinationAnnotationBitmap,
+                            destinationMarkerBitmap = destinationMarkerBitmap,
+                            mapBearingDegrees = map.cameraPosition.bearing,
                             userMarkerBitmap = userMarkerBitmap,
                             offlineRoadOverlayTracker = cameraTracker,
                         )
@@ -503,6 +520,8 @@ private fun updateMapOverlays(
     currentLocation: GeoCoordinate?,
     destinationLocation: GeoCoordinate?,
     destinationAnnotationBitmap: Bitmap,
+    destinationMarkerBitmap: Bitmap,
+    mapBearingDegrees: Double,
     userMarkerBitmap: Bitmap,
     offlineRoadOverlayTracker: CameraTracker,
 ) {
@@ -550,12 +569,23 @@ private fun updateMapOverlays(
             Point.fromLngLat(coordinate.longitude, coordinate.latitude),
         )
         val existingDestinationSource = style.getSource(DESTINATION_SOURCE_ID) as? GeoJsonSource
-        style.addImage(DESTINATION_IMAGE_ID, destinationAnnotationBitmap)
+        style.addImage(DESTINATION_CARD_IMAGE_ID, destinationAnnotationBitmap)
+        style.addImage(DESTINATION_MARKER_IMAGE_ID, destinationMarkerBitmap)
         if (existingDestinationSource == null) {
             style.addSource(GeoJsonSource(DESTINATION_SOURCE_ID, feature))
             style.addLayer(
+                SymbolLayer(DESTINATION_CARD_LAYER_ID, DESTINATION_SOURCE_ID).withProperties(
+                    iconImage(DESTINATION_CARD_IMAGE_ID),
+                    iconSize(1f),
+                    iconAnchor(Property.ICON_ANCHOR_CENTER),
+                    iconAllowOverlap(true),
+                    iconIgnorePlacement(true),
+                    iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_VIEWPORT),
+                ),
+            )
+            style.addLayer(
                 SymbolLayer(DESTINATION_LAYER_ID, DESTINATION_SOURCE_ID).withProperties(
-                    iconImage(DESTINATION_IMAGE_ID),
+                    iconImage(DESTINATION_MARKER_IMAGE_ID),
                     iconSize(1f),
                     iconAnchor(Property.ICON_ANCHOR_BOTTOM),
                     iconAllowOverlap(true),
@@ -566,6 +596,14 @@ private fun updateMapOverlays(
         } else {
             existingDestinationSource.setGeoJson(feature)
         }
+        updateDestinationCardPlacement(
+            style = style,
+            routeCoordinates = routeCoordinates,
+            mapBearingDegrees = mapBearingDegrees,
+        )
+    } ?: run {
+        (style.getSource(DESTINATION_SOURCE_ID) as? GeoJsonSource)
+            ?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
     }
 
     currentLocation?.let { coordinate ->
@@ -951,97 +989,118 @@ private fun createDestinationAnnotationBitmap(
     val density = context.resources.displayMetrics.density
     fun px(dp: Float): Float = dp * density
 
-    val width = px(208f).toInt()
-    val cardHeight = px(86f)
-    val pointerHeight = px(10f)
-    val pinSize = px(34f).toInt()
-    val totalHeight = (cardHeight + pointerHeight + pinSize).toInt()
-    val bitmap = Bitmap.createBitmap(width, totalHeight, Bitmap.Config.ARGB_8888)
+    val width = px(144f).toInt()
+    val height = px(68f).toInt()
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val centerX = width / 2f
-    val cardBounds = RectF(px(1f), px(1f), width - px(1f), cardHeight)
-
+    val bounds = RectF(px(2f), px(2f), width - px(2f), height - px(3f))
     val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         style = Paint.Style.FILL
-        setShadowLayer(px(3f), 0f, px(1f), Color.argb(70, 0, 0, 0))
+        setShadowLayer(px(3f), 0f, px(1f), Color.argb(72, 0, 0, 0))
     }
-    canvas.drawRoundRect(cardBounds, px(10f), px(10f), cardPaint)
-    val pointer = Path().apply {
-        moveTo(centerX - px(9f), cardHeight - px(1f))
-        lineTo(centerX, cardHeight + pointerHeight)
-        lineTo(centerX + px(9f), cardHeight - px(1f))
-        close()
-    }
-    canvas.drawPath(pointer, cardPaint)
-
+    canvas.drawRoundRect(bounds, px(12f), px(12f), cardPaint)
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(90, 126, 128)
+        color = Color.rgb(207, 218, 224)
         style = Paint.Style.STROKE
         strokeWidth = px(1f)
     }
-    canvas.drawRoundRect(cardBounds, px(10f), px(10f), borderPaint)
-    canvas.drawPath(pointer, borderPaint)
+    canvas.drawRoundRect(bounds, px(12f), px(12f), borderPaint)
+
+    val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = if (kindLabel?.uppercase() == "TEA") Color.rgb(32, 156, 91) else Color.rgb(0, 85, 150)
+        style = Paint.Style.FILL
+    }
+    canvas.drawRoundRect(
+        RectF(px(3f), px(11f), px(8f), height - px(12f)),
+        px(3f),
+        px(3f),
+        accentPaint,
+    )
 
     val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(12, 24, 31)
-        textSize = px(14f)
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-    }
-    val distancePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(0, 48, 73)
         textSize = px(13f)
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
-    val textStart = px(13f)
-    val textWidth = width - px(26f)
-
-    // Lencana jenis fasilitas: kuning untuk TES (gedung), hijau untuk TEA (kawasan perbukitan).
-    var nameBaseline = px(25f)
-    if (!kindLabel.isNullOrBlank()) {
-        val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (kindLabel.uppercase() == "TEA") Color.rgb(88, 214, 141) else Color.rgb(247, 255, 12)
-            style = Paint.Style.FILL
-        }
-        val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(1, 52, 109)
-            textSize = px(10f)
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        val badgeText = kindLabel.uppercase()
-        val badgeWidth = badgeTextPaint.measureText(badgeText) + px(10f)
-        val badgeBounds = RectF(textStart, px(9f), textStart + badgeWidth, px(24f))
-        canvas.drawRoundRect(badgeBounds, px(4f), px(4f), badgePaint)
-        canvas.drawText(badgeText, textStart + px(5f), px(20f), badgeTextPaint)
-        nameBaseline = px(42f)
+    val detailsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(73, 91, 101)
+        textSize = px(11.5f)
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
-
+    val textStart = px(16f)
+    val textWidth = width - px(28f)
+    val kind = kindLabel?.uppercase()?.takeIf { it.isNotBlank() }
+    val title = listOfNotNull(kind, destinationName).joinToString(" · ")
     canvas.drawText(
-        fitText(destinationName.uppercase(), namePaint, textWidth),
+        fitText(title, namePaint, textWidth),
         textStart,
-        nameBaseline,
+        px(29f),
         namePaint,
     )
     val details = listOfNotNull(
-        distanceLabel.takeIf { it.isNotBlank() }?.let { "≈ $it" },
+        distanceLabel.takeIf { it.isNotBlank() }?.let { "± $it" },
         durationLabel?.takeIf { it.isNotBlank() },
-    )
-    if (details.isNotEmpty()) {
+    ).joinToString(" · ")
+    if (details.isNotBlank()) {
         canvas.drawText(
-            fitText(details.joinToString(" · "), distancePaint, textWidth),
+            fitText(details, detailsPaint, textWidth),
             textStart,
-            nameBaseline + px(20f),
-            distancePaint,
+            px(49f),
+            detailsPaint,
         )
     }
-
-    context.getDrawable(R.drawable.ic_figma_destination)?.let { drawable ->
-        val left = ((width - pinSize) / 2f).toInt()
-        val top = (cardHeight + pointerHeight).toInt()
-        drawable.setBounds(left, top, left + pinSize, top + pinSize)
-        drawable.draw(canvas)
-    }
     return bitmap
+}
+
+private fun createDestinationMarkerBitmap(context: Context): Bitmap {
+    val density = context.resources.displayMetrics.density
+    val size = (34f * density).toInt().coerceAtLeast(1)
+    return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
+        val canvas = Canvas(bitmap)
+        context.getDrawable(R.drawable.ic_figma_destination)?.let { drawable ->
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+        }
+    }
+}
+
+/**
+ * Memindahkan kartu ke sisi lanjutan arah perjalanan. Garis rute masuk ke tujuan dari sisi
+ * sebaliknya, sehingga kartu tidak lagi menutup ruas terakhir yang harus diikuti pengguna.
+ */
+private fun updateDestinationCardPlacement(
+    style: Style,
+    routeCoordinates: List<GeoCoordinate>,
+    mapBearingDegrees: Double,
+) {
+    val layer = style.getLayerAs<SymbolLayer>(DESTINATION_CARD_LAYER_ID) ?: return
+    val offset = destinationCardOffset(routeCoordinates, mapBearingDegrees)
+    layer.setProperties(iconOffset(arrayOf(offset.first, offset.second)))
+}
+
+private fun destinationCardOffset(
+    routeCoordinates: List<GeoCoordinate>,
+    mapBearingDegrees: Double,
+): Pair<Float, Float> {
+    // MapLibre Android menafsirkan icon-offset sebagai dp, jadi jangan dikalikan density layar.
+    if (routeCoordinates.size < 2) return 76f to -44f
+    val previous = routeCoordinates[routeCoordinates.lastIndex - 1]
+    val destination = routeCoordinates.last()
+    val travelBearing = BearingCalculator.bearingDegrees(previous, destination)
+    val relativeRadians = Math.toRadians(
+        BearingCalculator.relativeRotationDegrees(travelBearing, mapBearingDegrees).toDouble(),
+    )
+    val screenX = sin(relativeRadians).toFloat()
+    val screenY = (-cos(relativeRadians)).toFloat()
+    // Gunakan sisi tegak lurus terhadap ruas terakhir. Untuk ruas hampir vertikal, pilih sisi
+    // kanan agar kartu tidak terdorong ke bawah header; untuk ruas hampir horizontal, pilih bawah.
+    val perpendicularX = abs(screenY)
+    return if (perpendicularX >= 0.42f) {
+        76f to screenX * 24f
+    } else {
+        0f to 64f
+    }
 }
 
 private fun fitText(text: String, paint: Paint, maxWidth: Float): String {
@@ -1169,6 +1228,7 @@ private const val LOCATION_SOURCE_ID = "user-location-source"
 private const val LOCATION_LAYER_ID = "user-location-layer"
 private const val USER_LOCATION_IMAGE_ID = "user-location-navigation-image"
 private const val DESTINATION_SOURCE_ID = "evacuation-destination-source"
+private const val DESTINATION_CARD_LAYER_ID = "evacuation-destination-card-layer"
 private const val DESTINATION_LAYER_ID = "evacuation-destination-layer"
 private const val FACILITY_SOURCE_ID = "facility-source"
 private const val FOCUS_SINGLE_ZOOM = 15.0
@@ -1176,7 +1236,8 @@ private const val FACILITY_LAYER_ID = "facility-layer"
 private const val FACILITY_ID_PROPERTY = "id"
 private const val FACILITY_KIND_PROPERTY = "kind"
 private const val FACILITY_SELECTED_PROPERTY = "selected"
-private const val DESTINATION_IMAGE_ID = "evacuation-destination-annotation-image"
+private const val DESTINATION_CARD_IMAGE_ID = "evacuation-destination-card-image"
+private const val DESTINATION_MARKER_IMAGE_ID = "evacuation-destination-marker-image"
 private const val SAFE_ZONE_SOURCE_ID = "tsunami-safe-zone-source"
 private const val SAFE_ZONE_FILL_LAYER_ID = "tsunami-safe-zone-fill-layer"
 private const val LOW_RISK_ZONE_SOURCE_ID = "tsunami-low-risk-zone-source"

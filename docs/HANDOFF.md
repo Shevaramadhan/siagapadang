@@ -291,3 +291,15 @@ Commit `bce00dd` dari Sheva mengubah **sepuluh berkas di `android/`** — termas
 Isi perubahannya sendiri berguna — dialog konfirmasi check-in dan pembacaan rute TEA (`findTeaRoute`, `findTeaPathSteps`). Kueri TEA itu menelusuri `tb_tea_next` per lompatan dengan CTE rekursif; itu **sah** karena membaca data prakomputasi, bukan pencarian lintasan, tetapi waktunya belum diukur terhadap NF-02. Pekerjaan TEA juga milik issue #1 yang ditugaskan ke Habib, jadi perlu disepakati siapa yang melanjutkan.
 
 **Pelajaran untuk penerus:** setelah `git pull`, jalankan `:android:app:testDebugUnitTest` sebelum melanjutkan. Rebase yang bersih tidak berarti kodenya masih dapat dikompilasi.
+
+- **Kontrol zona, riwayat rute, dan kartu tujuan diperbarui di branch `feat/route-history-map-polish`.**
+  Tombol zona peta kecil sekarang ikon 48 dp. Rute sebelumnya dapat dipilih kembali dan dihitung ulang
+  dari posisi terbaru; rute aktif berpindah ke daftar sehingga pengguna bisa kembali ke alternatif.
+  Kartu tujuan dipisahkan dari pin dan bergeser menjauhi ruas terakhir. Popup hasil laporan hambatan
+  sudah mengikuti desain V3. Sebanyak 140 unit test lulus dan alur TEA → TES → TEA diuji pada Infinix
+  X6855. Branch belum di-push.
+- **Integrasi status emergency backend masih terbuka.** Sumber resmi backend adalah `EmergencyEvent`
+  nyata berstatus `ACTIVE`; `EmergencyApiClient.getActiveEvent()` sudah ada, tetapi belum dipakai oleh
+  ViewModel/UI. Status potensi tsunami BMKG saat ini hanya memicu indikator merah/dialog relevansi dan
+  tidak otomatis mengaktifkan emergency backend. Putuskan pemetaan state, frekuensi polling/push, dan
+  perubahan UI sebelum implementasi.

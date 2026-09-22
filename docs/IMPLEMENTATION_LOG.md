@@ -259,3 +259,26 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Perubahan hanya berlaku pada ikon launcher; ukuran logo splash screen tidak berubah.
 - APK debug berhasil dibangun dan dipasang pada Infinix X6855. Ikon diperiksa melalui hasil pencarian
   app drawer: logo memiliki ruang tepi yang jelas, tidak terpotong, dan label aplikasi tetap utuh.
+
+## 22 September 2026 — Kontrol Zona, Riwayat Rute, dan Kartu Tujuan
+
+- Branch: `feat/route-history-map-polish`; belum di-push.
+- Tombol status zona pada peta kecil kini berupa ikon bulat 48 dp, sama dengan tombol pusatkan. Nama
+  zona tetap tersedia lewat deskripsi aksesibilitas dan legenda lengkap pada mode peta besar.
+- Daftar **Rute sebelumnya** kini interaktif. Memilih tujuan lama menghitung ulang rute dari posisi
+  pengguna terbaru, memindahkan rute aktif ke daftar, dan memungkinkan pengguna kembali lagi ke
+  alternatif tanpa memakai garis lama yang sudah tertinggal.
+- Daftar rute lama dibatasi lebarnya agar tidak bertabrakan dengan gelembung tombol pusatkan. Teks
+  tombol pusatkan dipadatkan dari **Kembali ke titik Anda** menjadi **Ke posisi Anda**.
+- Kartu nama, jarak, dan waktu tujuan dipisahkan dari pin tujuan. Kartu memakai susunan lebih ringkas
+  dan berpindah tegak lurus terhadap ruas terakhir ketika arah/rotasi peta berubah, sehingga garis
+  jalan menuju tujuan tetap terlihat.
+- Status pengiriman laporan hambatan, termasuk penolakan posko, sekarang muncul sebagai dialog tengah
+  bergaya V3 dengan keadaan diproses, diterima, disimpan, atau belum diterima; banner lama dihapus.
+- Audit keadaan darurat: backend menganggap darurat hanya ketika ada `EmergencyEvent` nyata berstatus
+  `ACTIVE`. Android sudah memiliki `getActiveEvent()`, tetapi belum memanggilnya dan belum mengubah UI
+  berdasarkan event backend. Potensi tsunami BMKG saat ini hanya memerahkan indikator serta membuka
+  dialog layar penuh bila kejadian baru dan relevan; status itu tidak otomatis mengaktifkan event backend.
+- Unit test Android: 140 lulus, 0 gagal. APK ARM64 dipasang pada Infinix X6855. Pemilihan TEA → TES →
+  TEA berhasil; tujuan yang ditinggalkan berganti di daftar rute lama, dan daftar tidak menutupi tombol
+  pusatkan. Kartu tujuan serta garis rute diperiksa pada mode peta besar.
