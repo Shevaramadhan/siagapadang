@@ -2093,6 +2093,8 @@ private fun EvacuationMapPanel(
     // Tinggi tombol tindakan di bawah diukur agar tombol pusatkan berdiri di atasnya dengan
     // jarak tetap, berapa pun banyak baris teks yang dipakai tombol itu.
     var bottomActionHeightPx by remember { mutableIntStateOf(0) }
+    var zoneLegendHeightPx by remember { mutableIntStateOf(0) }
+    var isZoneLegendExpanded by rememberSaveable { mutableStateOf(false) }
     var routeOverviewRequest by rememberSaveable { mutableIntStateOf(0) }
     var routeChangeNotice by remember { mutableStateOf<String?>(null) }
     var zoneStatusNotice by remember { mutableStateOf<String?>(null) }
@@ -2122,6 +2124,23 @@ private fun EvacuationMapPanel(
             .height(mapHeight)
             .clip(shape),
     ) {
+        val mapDensity = LocalDensity.current
+        val controlBottomPadding = if (state.isOutsideInundationZoneAtStart) {
+            28.dp
+        } else if (bottomActionHeightPx > 0) {
+            with(mapDensity) { bottomActionHeightPx.toDp() } + 24.dp
+        } else {
+            108.dp
+        }
+        val collapsedZoneHeightPx = with(mapDensity) { 48.dp.roundToPx() }
+        val expandedZoneExtraHeight = if (
+            isZoneLegendExpanded && zoneLegendHeightPx > collapsedZoneHeightPx
+        ) {
+            with(mapDensity) { (zoneLegendHeightPx - collapsedZoneHeightPx).toDp() }
+        } else {
+            0.dp
+        }
+        val routeHistoryBottomPadding = controlBottomPadding + 64.dp + expandedZoneExtraHeight
         val isApproachingRoute = state.guidance?.isApproachingRoute == true
         val nearestRouteCoordinate = state.guidance?.nearestRouteCoordinate
         val routeCoordinates = if (
@@ -2198,25 +2217,32 @@ private fun EvacuationMapPanel(
                 CompactZoneStatusPill(
                     status = state.currentZoneStatus,
                     onClick = onExpandMap,
-                    modifier = if (state.isOutsideInundationZoneAtStart) {
-                        Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 16.dp, bottom = 84.dp)
-                            .zIndex(8f)
-                    } else {
-                        Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 8.dp)
-                            .zIndex(8f)
-                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(
+                            start = 16.dp,
+                            bottom = if (state.isOutsideInundationZoneAtStart) {
+                                84.dp
+                            } else {
+                                controlBottomPadding
+                            },
+                        )
+                        .zIndex(10f),
                 )
             } else {
                 ZoneStatusPill(
                     status = state.currentZoneStatus,
+                    expanded = isZoneLegendExpanded,
+                    onExpandedChange = { isZoneLegendExpanded = it },
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 16.dp, end = 88.dp, bottom = 84.dp)
-                        .zIndex(8f),
+                        .padding(
+                            start = 16.dp,
+                            end = 88.dp,
+                            bottom = controlBottomPadding,
+                        )
+                        .onSizeChanged { zoneLegendHeightPx = it.height }
+                        .zIndex(10f),
                 )
             }
         }
@@ -2228,8 +2254,12 @@ private fun EvacuationMapPanel(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 16.dp, end = 88.dp, bottom = 148.dp)
-                    .zIndex(8f),
+                    .padding(
+                        start = 16.dp,
+                        end = 88.dp,
+                        bottom = routeHistoryBottomPadding,
+                    )
+                    .zIndex(9f),
             ) {
                 if (routeChangeNotice != null) {
                     RouteChangeNotice(message = routeChangeNotice.orEmpty(), scale = scale)
@@ -2328,13 +2358,7 @@ private fun EvacuationMapPanel(
                     .align(Alignment.BottomEnd)
                     .padding(
                         end = 16.dp,
-                        bottom = if (state.isOutsideInundationZoneAtStart) {
-                            28.dp
-                        } else if (bottomActionHeightPx > 0) {
-                            with(LocalDensity.current) { bottomActionHeightPx.toDp() } + 24.dp
-                        } else {
-                            108.dp
-                        },
+                        bottom = controlBottomPadding,
                     )
                     .zIndex(9f),
             )
@@ -2462,9 +2486,10 @@ private fun ZoneStatusNotice(
 @Composable
 private fun ZoneStatusPill(
     status: InundationZoneStatus?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
     val appearance = zoneStatusAppearance(status)
     Surface(
         color = Color.White,
@@ -2474,7 +2499,7 @@ private fun ZoneStatusPill(
         shadowElevation = 4.dp,
         modifier = modifier
             .clip(if (expanded) RoundedCornerShape(18.dp) else CircleShape)
-            .clickable(role = Role.Button) { expanded = !expanded }
+            .clickable(role = Role.Button) { onExpandedChange(!expanded) }
             .animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS))
             .semantics {
                 contentDescription = if (expanded) {
@@ -2610,42 +2635,12 @@ private fun PreviousRoutesPill(
         contentColor = SiagaNavy,
         shape = RoundedCornerShape(18.dp),
         shadowElevation = 6.dp,
-        modifier = modifier
-            .widthIn(max = 208.dp)
-            .animateContentSize(animationSpec = tween(UI_ANIMATION_MILLIS)),
+        modifier = modifier.width(208.dp),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable(role = Role.Button) { expanded = !expanded }
-                    .semantics {
-                        contentDescription = if (expanded) {
-                            "Ciutkan daftar rute sebelumnya"
-                        } else {
-                            "Buka daftar ${routes.size} rute sebelumnya"
-                        }
-                    }
-                    .padding(vertical = 2.dp),
-            ) {
-                PreviousRouteDash()
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Rute sebelumnya (${routes.size})",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    painterResource(if (expanded) R.drawable.ic_ms_expand_more else R.drawable.ic_ms_expand_less),
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
             if (expanded) {
                 Text(
                     text = "Ketuk tujuan untuk menggunakannya kembali. Rute saat ini akan tetap tersedia.",
@@ -2658,6 +2653,46 @@ private fun PreviousRoutesPill(
                         order = if (index == 0) "Rute terakhir" else "Rute sebelumnya",
                         route = route,
                         onClick = { onSelectRoute(route) },
+                    )
+                }
+            }
+            // Judul diletakkan terakhir agar tetap menempel pada posisi bawah saat daftar dibuka.
+            // Sasaran sentuh tidak berpindah, sehingga ketukan kedua selalu menutup daftar.
+            Box(
+                contentAlignment = Alignment.CenterStart,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(role = Role.Button) { expanded = !expanded }
+                    .semantics {
+                        contentDescription = if (expanded) {
+                            "Ciutkan daftar rute sebelumnya"
+                        } else {
+                            "Buka daftar ${routes.size} rute sebelumnya"
+                        }
+                    },
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    PreviousRouteDash()
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Rute sebelumnya (${routes.size})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        painterResource(
+                            if (expanded) R.drawable.ic_ms_expand_more else R.drawable.ic_ms_expand_less,
+                        ),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }

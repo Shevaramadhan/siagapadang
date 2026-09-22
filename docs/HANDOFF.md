@@ -303,3 +303,8 @@ Isi perubahannya sendiri berguna — dialog konfirmasi check-in dan pembacaan ru
   ViewModel/UI. Status potensi tsunami BMKG saat ini hanya memicu indikator merah/dialog relevansi dan
   tidak otomatis mengaktifkan emergency backend. Putuskan pemetaan state, frekuensi polling/push, dan
   perubahan UI sebelum implementasi.
+- **Kontrol peta lanjutan di branch `feat/route-history-map-polish`.** Tombol zona dan pusatkan sekarang
+  tepat sejajar. Sasaran ketuk panel **Rute sebelumnya** tidak berpindah saat dibuka sehingga panel dapat
+  ditutup dengan ketukan kedua. Saat legenda zona dibuka, panel riwayat bergeser ke atas mengikuti tinggi
+  legenda dan menyisakan jarak sekitar 24 dp. Sebanyak 140 unit test lulus dan APK sudah dipasang serta
+  diperiksa pada Infinix X6855. Branch belum di-push.

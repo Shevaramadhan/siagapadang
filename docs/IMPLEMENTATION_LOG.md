@@ -282,3 +282,15 @@ Dokumen ini mencatat perubahan pengembangan, hasil pemeriksaan, dan validasi yan
 - Unit test Android: 140 lulus, 0 gagal. APK ARM64 dipasang pada Infinix X6855. Pemilihan TEA → TES →
   TEA berhasil; tujuan yang ditinggalkan berganti di daftar rute lama, dan daftar tidak menutupi tombol
   pusatkan. Kartu tujuan serta garis rute diperiksa pada mode peta besar.
+
+## 22 September 2026 — Penyelarasan Kontrol dan Panel Peta
+
+- Branch: `feat/route-history-map-polish`; belum di-push.
+- Tombol zona dan tombol pusatkan memakai acuan bawah yang sama. Pada Infinix X6855 keduanya terukur
+  tepat sejajar pada koordinat vertikal `2006–2138` piksel.
+- Sasaran ketuk **Rute sebelumnya** kini tetap pada posisi yang sama ketika panel dibuka. Empat kali
+  buka-tutup berturut-turut pada koordinat yang sama berhasil tanpa ketukan terlewat.
+- Ketika legenda zona dibuka, panel rute sebelumnya bergeser mengikuti tinggi legenda. Validasi pada
+  perangkat menunjukkan jarak 66 piksel (sekitar 24 dp) sehingga kedua panel tidak saling menutupi.
+- Sebanyak 140 unit test lulus, APK ARM64 berhasil dibangun, dan versi terbaru dipasang pada Infinix
+  X6855.
