@@ -2216,7 +2216,10 @@ private fun EvacuationMapPanel(
             if (expansionProgress < 0.5f) {
                 CompactZoneStatusPill(
                     status = state.currentZoneStatus,
-                    onClick = onExpandMap,
+                    onClick = {
+                        isZoneLegendExpanded = true
+                        onExpandMap()
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(
@@ -2635,11 +2638,14 @@ private fun PreviousRoutesPill(
         contentColor = SiagaNavy,
         shape = RoundedCornerShape(18.dp),
         shadowElevation = 6.dp,
-        modifier = modifier.width(208.dp),
+        modifier = modifier.width(if (expanded) 208.dp else 144.dp),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(
+                horizontal = if (expanded) 12.dp else 8.dp,
+                vertical = if (expanded) 8.dp else 0.dp,
+            ),
         ) {
             if (expanded) {
                 Text(
@@ -2680,8 +2686,8 @@ private fun PreviousRoutesPill(
                     PreviousRouteDash()
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Rute sebelumnya (${routes.size})",
-                        fontSize = 12.sp,
+                        text = "Rute lalu (${routes.size})",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
