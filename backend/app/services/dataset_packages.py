@@ -6,12 +6,8 @@ import re
 
 
 DEFAULT_PACKAGE_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "android"
-    / "app"
-    / "src"
-    / "main"
-    / "assets"
+    Path(__file__).resolve().parents[2]
+    / "data"
     / "ranah_siaga.db"
 )
 
