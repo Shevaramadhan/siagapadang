@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import engine, get_db
 from app.api.endpoints import sync, reports, shelters, bmkg, events
+import app.services.firebase  # Inisialisasi Firebase Admin
 
 app = FastAPI(
     title="API Evakuasi Tsunami Padang (Offline-First Backend)",
