@@ -7,9 +7,13 @@ import math
 from datetime import datetime, timezone
 from typing import Optional, TypedDict
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
+from app.database import get_db
+from app.models.domain import EmergencyEvent, EventStatus
 from app.schemas.bmkg import BMKGStatusResponse, BMKGRegionalEvent
+from app.services.firebase import send_tsunami_warning_push
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -56,7 +60,7 @@ async def fetch_bmkg_data(client: httpx.AsyncClient, url: str) -> Optional[dict]
 
 
 @router.get("", response_model=BMKGStatusResponse)
-async def get_bmkg_status():
+async def get_bmkg_status(db: Session = Depends(get_db)):
     current_time = time.time()
 
     cached = bmkg_cache["data"]
@@ -125,6 +129,28 @@ async def get_bmkg_status():
             regional_data_status="live"
         )
         bmkg_cache["last_fetched_utama"] = current_time
+
+        # Kirim notifikasi jika potensi tsunami
+        if is_tsunami:
+            event_id = str(gempa.get("DateTime") or "")
+            # Cek apakah event ini sudah dikirim / sudah ada di database
+            existing_event = db.query(EmergencyEvent).filter(EmergencyEvent.external_event_id == event_id).first()
+            if not existing_event:
+                # Daftarkan ke database untuk mencegah notifikasi ganda
+                new_event = EmergencyEvent(
+                    external_event_id=event_id,
+                    source="BMKG",
+                    status=EventStatus.ACTIVE,
+                    is_simulation=False
+                )
+                db.add(new_event)
+                db.commit()
+
+                # Kirim push notification
+                title = "Peringatan potensi tsunami dari BMKG"
+                body = f"{gempa.get('Magnitude', '')} · {gempa.get('Wilayah', '')}. Ketuk untuk membuka arah ke TES/TEA terdekat."
+                send_tsunami_warning_push(event_id, title, body)
+
     else:
         if cached:
             result = cached.model_copy()
